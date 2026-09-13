@@ -115,7 +115,7 @@ print(
 
 
 # ============================================================
-# BUILD PERSONALIZED BASELINES
+# BUILD PERSONALIZED Z-SCORES
 # ============================================================
 
 print("\n" + "=" * 70)
@@ -149,6 +149,13 @@ for participant in sorted(participant_data.keys()):
 
     for variable in BEHAVIORAL_VARIABLES:
 
+        if variable not in df.columns:
+            behavioral_stats[variable] = {
+                "mean": np.nan,
+                "sd": np.nan
+            }
+            continue
+
         values = pd.to_numeric(
             baseline_df[variable],
             errors="coerce"
@@ -176,6 +183,13 @@ for participant in sorted(participant_data.keys()):
 
     for variable in WELLNESS_VARIABLES:
 
+        if variable not in df.columns:
+            wellness_stats[variable] = {
+                "mean": np.nan,
+                "sd": np.nan
+            }
+            continue
+
         values = pd.to_numeric(
             baseline_df[variable],
             errors="coerce"
@@ -196,16 +210,27 @@ for participant in sorted(participant_data.keys()):
             }
 
     # --------------------------------------------------------
-    # Calculate daily personalized Z-scores
+    # Calculate daily Z-scores
     # --------------------------------------------------------
 
     for _, row in analysis_df.iterrows():
 
         date = row["Date"]
 
-        behavioral_z = {}
+        record = {
+            "Participant": participant,
+            "Date": date
+        }
+
+        # Behavioral variables
 
         for variable in BEHAVIORAL_VARIABLES:
+
+            if variable not in df.columns:
+                record[
+                    f"{variable}_Z"
+                ] = np.nan
+                continue
 
             value = pd.to_numeric(
                 row[variable],
@@ -222,17 +247,27 @@ for participant in sorted(participant_data.keys()):
                 or sd == 0
             ):
 
-                behavioral_z[variable] = np.nan
+                record[
+                    f"{variable}_Z"
+                ] = np.nan
 
             else:
 
-                behavioral_z[variable] = (
+                record[
+                    f"{variable}_Z"
+                ] = (
                     value - mean
                 ) / sd
 
-        wellness_z = {}
+        # Well-being variables
 
         for variable in WELLNESS_VARIABLES:
+
+            if variable not in df.columns:
+                record[
+                    f"{variable}_Z"
+                ] = np.nan
+                continue
 
             value = pd.to_numeric(
                 row[variable],
@@ -249,34 +284,17 @@ for participant in sorted(participant_data.keys()):
                 or sd == 0
             ):
 
-                wellness_z[variable] = np.nan
+                record[
+                    f"{variable}_Z"
+                ] = np.nan
 
             else:
 
-                wellness_z[variable] = (
+                record[
+                    f"{variable}_Z"
+                ] = (
                     value - mean
                 ) / sd
-
-        # ----------------------------------------------------
-        # Store one daily record
-        # ----------------------------------------------------
-
-        record = {
-            "Participant": participant,
-            "Date": date
-        }
-
-        for variable in BEHAVIORAL_VARIABLES:
-
-            record[
-                f"{variable}_Z"
-            ] = behavioral_z[variable]
-
-        for variable in WELLNESS_VARIABLES:
-
-            record[
-                f"{variable}_Z"
-            ] = wellness_z[variable]
 
         all_results.append(record)
 
@@ -317,11 +335,17 @@ for participant in sorted(
             f"{behavioral_variable}_Z"
         )
 
+        if behavioral_column not in participant_df.columns:
+            continue
+
         for wellness_variable in WELLNESS_VARIABLES:
 
             wellness_column = (
                 f"{wellness_variable}_Z"
             )
+
+            if wellness_column not in participant_df.columns:
+                continue
 
             pair_df = participant_df[
                 [
