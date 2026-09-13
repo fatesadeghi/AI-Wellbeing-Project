@@ -1,0 +1,180 @@
+import pandas as pd
+import numpy as np
+from pathlib import Path
+
+# ============================================================
+# 03 - PERSONALIZED BASELINE AND DAILY DEVIATIONS
+# ============================================================
+
+DATA_DIR = Path("data/pmdata")
+OUTPUT_DIR = Path("results/baseline")
+OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+
+OBJECTIVE_VARIABLES = [
+    "Steps",
+    "Exercise_Count",
+    "Exercise_Duration",
+    "Exercise_Distance",
+    "Exercise_Calories",
+    "Exercise_Avg_HR",
+    "Sleep_Hours",
+    "Sleep_Duration_Score",
+    "Deep_Sleep_Minutes",
+    "Sleep_Restlessness",
+    "Sleep_Composition",
+    "Sleep_Revitalization",
+    "Sleep_Score",
+]
+
+BASELINE_FRACTION = 0.50
+
+all_baselines = []
+all_deviations = []
+
+files = sorted(DATA_DIR.glob("p*_daily_merged.csv"))
+
+print("=" * 70)
+print("PERSONALIZED BASELINE AND DAILY DEVIATIONS")
+print("=" * 70)
+
+for file in files:
+
+    participant = file.stem.split("_")[0]
+
+    df = pd.read_csv(file)
+
+    if "Date" not in df.columns:
+        continue
+
+    df["Date"] = pd.to_datetime(df["Date"])
+    df = df.sort_values("Date").reset_index(drop=True)
+
+    n = len(df)
+    baseline_n = int(np.floor(n * BASELINE_FRACTION))
+
+    baseline = df.iloc[:baseline_n].copy()
+    analysis = df.iloc[baseline_n:].copy()
+
+    print(
+        f"{participant}: "
+        f"baseline={len(baseline)} days, "
+        f"analysis={len(analysis)} days"
+    )
+
+    baseline_row = {"Participant": participant}
+
+    # --------------------------------------------------------
+    # Calculate personal baseline
+    # --------------------------------------------------------
+
+    stats = {}
+
+    for variable in OBJECTIVE_VARIABLES:
+
+        if variable not in baseline.columns:
+            baseline_row[f"{variable}_Mean"] = np.nan
+            baseline_row[f"{variable}_Median"] = np.nan
+            baseline_row[f"{variable}_SD"] = np.nan
+            stats[variable] = (np.nan, np.nan, np.nan)
+            continue
+
+        values = pd.to_numeric(
+            baseline[variable],
+            errors="coerce"
+        ).dropna()
+
+        if len(values) == 0:
+            mean = median = sd = np.nan
+        else:
+            mean = values.mean()
+            median = values.median()
+            sd = values.std(ddof=1)
+
+        baseline_row[f"{variable}_Mean"] = mean
+        baseline_row[f"{variable}_Median"] = median
+        baseline_row[f"{variable}_SD"] = sd
+
+        stats[variable] = (mean, median, sd)
+
+    all_baselines.append(baseline_row)
+
+    # --------------------------------------------------------
+    # Calculate daily deviations
+    # --------------------------------------------------------
+
+    for _, row in analysis.iterrows():
+
+        deviation_row = {
+            "Participant": participant,
+            "Date": row["Date"],
+        }
+
+        for variable in OBJECTIVE_VARIABLES:
+
+            if variable not in analysis.columns:
+                deviation_row[f"{variable}_Deviation"] = np.nan
+                deviation_row[f"{variable}_Z"] = np.nan
+                deviation_row[f"{variable}_Abs_Z"] = np.nan
+                continue
+
+            value = pd.to_numeric(
+                pd.Series([row[variable]]),
+                errors="coerce"
+            ).iloc[0]
+
+            mean, median, sd = stats[variable]
+
+            # Raw deviation from personal median
+            if pd.isna(value) or pd.isna(median):
+                deviation = np.nan
+            else:
+                deviation = value - median
+
+            # Standardized deviation
+            if (
+                pd.isna(value)
+                or pd.isna(mean)
+                or pd.isna(sd)
+                or sd == 0
+            ):
+                z = np.nan
+            else:
+                z = (value - mean) / sd
+
+            deviation_row[f"{variable}_Deviation"] = deviation
+            deviation_row[f"{variable}_Z"] = z
+            deviation_row[f"{variable}_Abs_Z"] = (
+                abs(z) if not pd.isna(z) else np.nan
+            )
+
+        all_deviations.append(deviation_row)
+
+# ------------------------------------------------------------
+# Save results
+# ------------------------------------------------------------
+
+baselines_df = pd.DataFrame(all_baselines)
+deviations_df = pd.DataFrame(all_deviations)
+
+baselines_df.to_csv(
+    OUTPUT_DIR / "personalized_baselines.csv",
+    index=False
+)
+
+deviations_df.to_csv(
+    OUTPUT_DIR / "daily_personalized_deviations.csv",
+    index=False
+)
+
+print()
+print("=" * 70)
+print("COMPLETE")
+print("=" * 70)
+
+print(f"Participants: {len(baselines_df)}")
+print(f"Daily deviation records: {len(deviations_df)}")
+
+print()
+print("Output:")
+print(OUTPUT_DIR / "personalized_baselines.csv")
+print(OUTPUT_DIR / "daily_personalized_deviations.csv")
