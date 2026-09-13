@@ -5,7 +5,7 @@ import numpy as np
 
 
 # ============================================================
-# 0. PATHS
+# 1. PATHS
 # ============================================================
 
 BASE_DIR = os.path.dirname(
@@ -33,11 +33,11 @@ os.makedirs(
 
 
 # ============================================================
-# 1. SETTINGS
+# 2. SETTINGS
 # ============================================================
 
-# First 50% of each participant's chronological data
-# is used to learn their personal baseline.
+# The first 50% of each participant's chronological data
+# is used to learn the participant's personal baseline.
 
 BASELINE_FRACTION = 0.50
 
@@ -60,7 +60,7 @@ OBJECTIVE_VARIABLES = [
 
 
 # ============================================================
-# 2. LOAD PARTICIPANT DATA
+# 3. LOAD PARTICIPANT FILES
 # ============================================================
 
 participant_data = {}
@@ -69,92 +69,107 @@ print("=" * 70)
 print("LOADING PARTICIPANT DATA")
 print("=" * 70)
 
+print(
+    f"Data directory: {DATA_DIR}"
+)
 
-for participant in sorted(
+print()
+
+
+if not os.path.exists(DATA_DIR):
+
+    raise FileNotFoundError(
+        f"Data directory not found:\n{DATA_DIR}"
+    )
+
+
+for file in sorted(
     os.listdir(DATA_DIR)
 ):
 
-    participant_path = os.path.join(
-        DATA_DIR,
-        participant
+    # --------------------------------------------------------
+    # Only use participant daily merged files
+    # --------------------------------------------------------
+
+    if not file.endswith(
+        "_daily_merged.csv"
+    ):
+
+        continue
+
+
+    # --------------------------------------------------------
+    # Extract participant ID
+    #
+    # Example:
+    # p01_daily_merged.csv
+    #       ↓
+    # p01
+    # --------------------------------------------------------
+
+    participant = file.replace(
+        "_daily_merged.csv",
+        ""
     )
 
-    if not os.path.isdir(
-        participant_path
-    ):
-        continue
 
-    csv_files = []
+    file_path = os.path.join(
+        DATA_DIR,
+        file
+    )
 
-    for file in os.listdir(
-        participant_path
-    ):
 
-        if file.lower().endswith(".csv"):
+    try:
 
-            csv_files.append(
-                os.path.join(
-                    participant_path,
-                    file
-                )
-            )
-
-    if not csv_files:
-        continue
-
-    dataframes = []
-
-    for file in sorted(csv_files):
-
-        try:
-
-            df = pd.read_csv(file)
-
-            dataframes.append(df)
-
-        except Exception as e:
-
-            print(
-                f"Could not read {file}: {e}"
-            )
-
-    if dataframes:
-
-        participant_df = pd.concat(
-            dataframes,
-            ignore_index=True
+        df = pd.read_csv(
+            file_path
         )
 
-        participant_df = (
-            participant_df
-            .drop_duplicates()
-        )
-
-        # Convert Date to datetime
-        if "Date" in participant_df.columns:
-
-            participant_df["Date"] = pd.to_datetime(
-                participant_df["Date"],
-                errors="coerce"
-            )
-
-            participant_df = (
-                participant_df
-                .sort_values("Date")
-                .reset_index(drop=True)
-            )
-
-        participant_data[
-            participant
-        ] = participant_df
+    except Exception as e:
 
         print(
-            f"{participant}: "
-            f"{len(participant_df)} rows"
+            f"Could not read {file}: {e}"
         )
+
+        continue
+
+
+    # --------------------------------------------------------
+    # Convert Date
+    # --------------------------------------------------------
+
+    if "Date" in df.columns:
+
+        df["Date"] = pd.to_datetime(
+            df["Date"],
+            errors="coerce"
+        )
+
+        df = (
+            df
+            .sort_values("Date")
+            .reset_index(drop=True)
+        )
+
+
+    # Remove duplicate rows
+
+    df = df.drop_duplicates()
+
+
+    participant_data[
+        participant
+    ] = df
+
+
+    print(
+        f"{participant}: "
+        f"{len(df)} rows"
+    )
 
 
 print()
+
 print(
     "Participants loaded:",
     len(participant_data)
@@ -162,12 +177,12 @@ print(
 
 
 # ============================================================
-# 3. CREATE PERSONALIZED BASELINES
+# 4. BUILD PERSONALIZED BASELINES
 # ============================================================
 
 baseline_records = []
 
-daily_deviation_records = []
+deviation_records = []
 
 
 print()
@@ -187,6 +202,7 @@ for participant, df in participant_data.items():
     baseline_end = int(
         n_rows * BASELINE_FRACTION
     )
+
 
     if baseline_end < 2:
 
@@ -212,13 +228,23 @@ for participant, df in participant_data.items():
     )
 
 
-    # --------------------------------------------------------
-    # Calculate baseline statistics
-    # --------------------------------------------------------
+    print(
+        f"{participant}: "
+        f"baseline={len(baseline_df)} days, "
+        f"analysis={len(analysis_df)} days"
+    )
 
-    participant_baseline = {
+
+    # ========================================================
+    # 5. CALCULATE BASELINE STATISTICS
+    # ========================================================
+
+    baseline_record = {
+
         "Participant": participant,
+
         "Baseline_N": len(baseline_df)
+
     }
 
 
@@ -231,6 +257,7 @@ for participant, df in participant_data.items():
 
             continue
 
+
         values = pd.to_numeric(
             baseline_df[variable],
             errors="coerce"
@@ -242,235 +269,4 @@ for participant, df in participant_data.items():
             continue
 
 
-        mean_value = values.mean()
-
-        median_value = values.median()
-
-        std_value = values.std(
-            ddof=1
-        )
-
-
-        # Avoid division by zero
-        if pd.isna(std_value) or std_value == 0:
-
-            std_value = np.nan
-
-
-        baseline_stats[
-            variable
-        ] = {
-
-            "mean": mean_value,
-
-            "median": median_value,
-
-            "std": std_value
-
-        }
-
-
-        participant_baseline[
-            f"{variable}_Mean"
-        ] = mean_value
-
-
-        participant_baseline[
-            f"{variable}_Median"
-        ] = median_value
-
-
-        participant_baseline[
-            f"{variable}_SD"
-        ] = std_value
-
-
-    baseline_records.append(
-        participant_baseline
-    )
-
-
-    # ========================================================
-    # 4. CALCULATE DAILY DEVIATIONS
-    # ========================================================
-
-
-    for _, row in analysis_df.iterrows():
-
-        record = {
-
-            "Participant": participant,
-
-            "Date": row.get("Date")
-
-        }
-
-
-        for variable in OBJECTIVE_VARIABLES:
-
-            if variable not in row.index:
-
-                continue
-
-
-            if variable not in baseline_stats:
-
-                continue
-
-
-            value = pd.to_numeric(
-                pd.Series([row[variable]]),
-                errors="coerce"
-            ).iloc[0]
-
-
-            mean_value = baseline_stats[
-                variable
-            ]["mean"]
-
-
-            median_value = baseline_stats[
-                variable
-            ]["median"]
-
-
-            std_value = baseline_stats[
-                variable
-            ]["std"]
-
-
-            # Raw deviation from personal median
-            if pd.notna(value):
-
-                record[
-                    f"{variable}_Deviation"
-                ] = value - median_value
-
-            else:
-
-                record[
-                    f"{variable}_Deviation"
-                ] = np.nan
-
-
-            # Standardized deviation from personal mean
-            if (
-                pd.notna(value)
-                and pd.notna(std_value)
-                and std_value > 0
-            ):
-
-                z_score = (
-                    value - mean_value
-                ) / std_value
-
-                record[
-                    f"{variable}_Z"
-                ] = z_score
-
-                record[
-                    f"{variable}_Abs_Z"
-                ] = abs(z_score)
-
-            else:
-
-                record[
-                    f"{variable}_Z"
-                ] = np.nan
-
-                record[
-                    f"{variable}_Abs_Z"
-                ] = np.nan
-
-
-        daily_deviation_records.append(
-            record
-        )
-
-
-# ============================================================
-# 5. SAVE BASELINE STATISTICS
-# ============================================================
-
-baseline_df = pd.DataFrame(
-    baseline_records
-)
-
-
-baseline_output = os.path.join(
-    OUTPUT_DIR,
-    "personalized_baselines.xlsx"
-)
-
-
-baseline_df.to_excel(
-    baseline_output,
-    index=False
-)
-
-
-# ============================================================
-# 6. SAVE DAILY DEVIATIONS
-# ============================================================
-
-deviation_df = pd.DataFrame(
-    daily_deviation_records
-)
-
-
-deviation_output = os.path.join(
-    OUTPUT_DIR,
-    "daily_personalized_deviations.xlsx"
-)
-
-
-deviation_df.to_excel(
-    deviation_output,
-    index=False
-)
-
-
-# ============================================================
-# 7. SUMMARY
-# ============================================================
-
-print()
-print("=" * 70)
-print("BASELINE ANALYSIS COMPLETE")
-print("=" * 70)
-
-print()
-
-print(
-    "Participants:",
-    len(participant_data)
-)
-
-print(
-    "Baseline fraction:",
-    BASELINE_FRACTION
-)
-
-print()
-
-print(
-    "Baseline output:"
-)
-
-print(
-    baseline_output
-)
-
-print()
-
-print(
-    "Deviation output:"
-)
-
-print(
-    deviation_output
-)
-
-print()
-print("=" * 70)
 ```
