@@ -16,10 +16,7 @@ print("=" * 70)
 print("SUMMARY OF FDR-SIGNIFICANT RELATIONSHIPS")
 print("=" * 70)
 
-# ------------------------------------------------------------
 # Load analysis results
-# ------------------------------------------------------------
-
 df = pd.read_csv(INPUT_FILE)
 
 print(f"Total relationship tests: {len(df)}")
@@ -106,7 +103,8 @@ relationship_summary.to_csv(
 # 4. Print behavioral summary
 # ------------------------------------------------------------
 
-print("\n" + "=" * 70)
+print()
+print("=" * 70)
 print("BY BEHAVIORAL VARIABLE")
 print("=" * 70)
 
@@ -119,7 +117,8 @@ else:
 # 5. Print well-being summary
 # ------------------------------------------------------------
 
-print("\n" + "=" * 70)
+print()
+print("=" * 70)
 print("BY WELL-BEING VARIABLE")
 print("=" * 70)
 
@@ -132,5 +131,28 @@ else:
 # 6. Print repeated relationships
 # ------------------------------------------------------------
 
-print("\n" + "=" * 70)
-print("
+print()
+print("=" * 70)
+print("BEHAVIOR × WELL-BEING RELATIONSHIPS")
+print("=" * 70)
+
+if len(relationship_summary) > 0:
+    print(relationship_summary.to_string(index=False))
+else:
+    print("No FDR-significant relationships found.")
+
+# ------------------------------------------------------------
+# 7. Output files
+# ------------------------------------------------------------
+
+print()
+print("=" * 70)
+print("OUTPUT FILES")
+print("=" * 70)
+
+print(OUTPUT_DIR / "significant_behavior_summary.csv")
+print(OUTPUT_DIR / "significant_wellness_summary.csv")
+print(OUTPUT_DIR / "significant_relationship_summary.csv")
+
+print()
+print("Summary analysis complete.")
