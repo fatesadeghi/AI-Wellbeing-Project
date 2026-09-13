@@ -4,8 +4,6 @@ from pathlib import Path
 
 # ============================================================
 # 03 - PERSONALIZED BASELINE AND DAILY DEVIATIONS
-# ============================================================
-
 DATA_DIR = Path("data/pmdata")
 OUTPUT_DIR = Path("results/baseline")
 OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
