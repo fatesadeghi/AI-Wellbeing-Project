@@ -1,9 +1,17 @@
-import pandas as pd
+        import pandas as pd
 import numpy as np
 from pathlib import Path
 
+# ============================================================
+# 09 - DAILY PERSONALIZED DEVIATION × WELL-BEING ANALYSIS
+# ============================================================
+
+DEVIATION_FILE = Path(
+    "results/baseline/daily_personalized_deviations.csv"
+)
+
 DATA_DIR = Path("data/pmdata")
-OUTPUT_DIR = Path("results/baseline")
+OUTPUT_DIR = Path("results/wellbeing_analysis")
 
 OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 
@@ -23,16 +31,42 @@ OBJECTIVE_VARIABLES = [
     "Sleep_Score"
 ]
 
-BASELINE_FRACTION = 0.5
+WELLNESS_VARIABLES = [
+    "fatigue",
+    "mood",
+    "readiness",
+    "sleep_quality",
+    "stress"
+]
 
-baselines = []
-deviations = []
+MIN_N = 10
+
+print("=" * 70)
+print("DAILY PERSONALIZED DEVIATION × WELL-BEING ANALYSIS")
+print("=" * 70)
+
+# ------------------------------------------------------------
+# Load deviation data
+# ------------------------------------------------------------
+
+deviation_df = pd.read_csv(DEVIATION_FILE)
+
+deviation_df["Date"] = pd.to_datetime(deviation_df["Date"])
+
+print()
+print("Deviation records:", len(deviation_df))
+print(
+    "Participants:",
+    deviation_df["Participant"].nunique()
+)
+
+# ------------------------------------------------------------
+# Load original participant data
+# ------------------------------------------------------------
+
+participants = {}
 
 files = sorted(DATA_DIR.glob("p*_daily_merged.csv"))
-
-print("=" * 60)
-print("PERSONALIZED BASELINE")
-print("=" * 60)
 
 for file in files:
 
@@ -47,177 +81,163 @@ for file in files:
 
     df = df.sort_values("Date").reset_index(drop=True)
 
-    total_days = len(df)
+    participants[participant] = df
 
-    baseline_days = int(total_days * BASELINE_FRACTION)
+print(
+    "Participants loaded:",
+    len(participants)
+)
 
-    baseline = df.iloc[:baseline_days]
-    analysis = df.iloc[baseline_days:]
+# ------------------------------------------------------------
+# Calculate correlations
+# ------------------------------------------------------------
 
-    print(
-        participant,
-        "baseline =", len(baseline),
-        "analysis =", len(analysis)
+results = []
+
+for participant, participant_deviations in deviation_df.groupby(
+    "Participant"
+):
+
+    if participant not in participants:
+        continue
+
+    original_df = participants[participant].copy()
+
+    # Keep only the analysis period
+    total_days = len(original_df)
+
+    baseline_days = int(
+        total_days * 0.5
     )
 
-    baseline_row = {
-        "Participant": participant
-    }
+    analysis_df = original_df.iloc[baseline_days:].copy()
 
-    baseline_stats = {}
+    # Merge deviation data with well-being data
+    merged = pd.merge(
+        participant_deviations,
+        analysis_df[
+            ["Date"] + WELLNESS_VARIABLES
+        ],
+        on="Date",
+        how="inner"
+    )
 
-    for variable in OBJECTIVE_VARIABLES:
+    for behavioral_variable in OBJECTIVE_VARIABLES:
 
-        if variable not in baseline.columns:
+        z_column = behavioral_variable + "_Z"
 
-            baseline_stats[variable] = {
-                "mean": np.nan,
-                "median": np.nan,
-                "sd": np.nan
-            }
-
-            baseline_row[variable + "_Mean"] = np.nan
-            baseline_row[variable + "_Median"] = np.nan
-            baseline_row[variable + "_SD"] = np.nan
-
+        if z_column not in merged.columns:
             continue
 
-        values = pd.to_numeric(
-            baseline[variable],
-            errors="coerce"
-        ).dropna()
+        for wellness_variable in WELLNESS_VARIABLES:
 
-        if len(values) == 0:
-
-            mean_value = np.nan
-            median_value = np.nan
-            sd_value = np.nan
-
-        else:
-
-            mean_value = values.mean()
-            median_value = values.median()
-            sd_value = values.std()
-
-        baseline_stats[variable] = {
-            "mean": mean_value,
-            "median": median_value,
-            "sd": sd_value
-        }
-
-        baseline_row[variable + "_Mean"] = mean_value
-        baseline_row[variable + "_Median"] = median_value
-        baseline_row[variable + "_SD"] = sd_value
-
-    baselines.append(baseline_row)
-
-    for _, row in analysis.iterrows():
-
-        deviation_row = {
-            "Participant": participant,
-            "Date": row["Date"]
-        }
-
-        for variable in OBJECTIVE_VARIABLES:
-
-            if variable not in analysis.columns:
-
-                deviation_row[variable + "_Deviation"] = np.nan
-                deviation_row[variable + "_Z"] = np.nan
-                deviation_row[variable + "_Abs_Z"] = np.nan
-
+            if wellness_variable not in merged.columns:
                 continue
 
-            value = pd.to_numeric(
-                pd.Series([row[variable]]),
+            data = merged[
+                [z_column, wellness_variable]
+            ].copy()
+
+            data[z_column] = pd.to_numeric(
+                data[z_column],
                 errors="coerce"
-            ).iloc[0]
+            )
 
-            mean_value = baseline_stats[variable]["mean"]
-            median_value = baseline_stats[variable]["median"]
-            sd_value = baseline_stats[variable]["sd"]
+            data[wellness_variable] = pd.to_numeric(
+                data[wellness_variable],
+                errors="coerce"
+            )
 
-            if pd.isna(value) or pd.isna(median_value):
+            data = data.dropna()
 
-                deviation = np.nan
+            n = len(data)
 
-            else:
-
-                deviation = value - median_value
-
-            if (
-                pd.isna(value)
-                or pd.isna(mean_value)
-                or pd.isna(sd_value)
-                or sd_value == 0
-            ):
-
-                z_score = np.nan
+            if n < MIN_N:
+                r = np.nan
+                p = np.nan
+                included = "No"
 
             else:
 
-                z_score = (
-                    (value - mean_value)
-                    / sd_value
+                r = data[z_column].corr(
+                    data[wellness_variable]
                 )
 
-            if pd.isna(z_score):
+                if pd.isna(r):
+                    p = np.nan
+                else:
 
-                absolute_z = np.nan
+                    # Pearson correlation p-value
+                    from scipy.stats import pearsonr
 
-            else:
+                    r, p = pearsonr(
+                        data[z_column],
+                        data[wellness_variable]
+                    )
 
-                absolute_z = abs(z_score)
+                included = "Yes"
 
-            deviation_row[
-                variable + "_Deviation"
-            ] = deviation
+            results.append(
+                {
+                    "Participant": participant,
+                    "Behavioral_Variable": behavioral_variable,
+                    "Wellness_Variable": wellness_variable,
+                    "r": r,
+                    "p": p,
+                    "N": n,
+                    "Included": included
+                }
+            )
 
-            deviation_row[
-                variable + "_Z"
-            ] = z_score
+# ------------------------------------------------------------
+# Save results
+# ------------------------------------------------------------
 
-            deviation_row[
-                variable + "_Abs_Z"
-            ] = absolute_z
+results_df = pd.DataFrame(results)
 
-        deviations.append(deviation_row)
+output_file = (
+    OUTPUT_DIR
+    / "daily_deviation_wellbeing_relationships.csv"
+)
 
-
-baseline_df = pd.DataFrame(baselines)
-
-deviation_df = pd.DataFrame(deviations)
-
-
-baseline_df.to_csv(
-    OUTPUT_DIR / "personalized_baselines.csv",
+results_df.to_csv(
+    output_file,
     index=False
 )
 
-deviation_df.to_csv(
-    OUTPUT_DIR / "daily_personalized_deviations.csv",
-    index=False
-)
+# ------------------------------------------------------------
+# Summary
+# ------------------------------------------------------------
 
+included_count = (
+    results_df["Included"] == "Yes"
+).sum()
 
-print()
-print("=" * 60)
-print("COMPLETE")
-print("=" * 60)
-
-print("Participants:", len(baseline_df))
-
-print(
-    "Daily deviation records:",
-    len(deviation_df)
-)
+significant_count = (
+    (results_df["Included"] == "Yes")
+    & (results_df["p"] < 0.05)
+).sum()
 
 print()
-print("Files created:")
+print("=" * 70)
+print("ANALYSIS COMPLETE")
+print("=" * 70)
+
 print(
-    OUTPUT_DIR / "personalized_baselines.csv"
+    "Total relationship tests:",
+    len(results_df)
 )
 
 print(
-    OUTPUT_DIR / "daily_personalized_deviations.csv"
+    "Included tests (N >= 10):",
+    included_count
 )
+
+print(
+    "Raw significant (p < 0.05):",
+    significant_count
+)
+
+print()
+print("Output:")
+print(output_file)
