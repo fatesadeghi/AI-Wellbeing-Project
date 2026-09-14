@@ -8,12 +8,25 @@ Use **PMData** as the primary dataset.
 
 ### Why?
 
-The project requires both:
+The project aims to detect meaningful changes in an individual's daily behavioral patterns and investigate whether these changes are associated with changes in self-reported well-being.
 
-* observable behavioral/sensor measurements, and
-* self-reported well-being measurements.
+The **CASAS Smart Home dataset** mainly provides indirect behavioral information based on sensor events and presence in different areas of the home. For example, it can indicate that a person was present in the kitchen or bedroom, but it does not directly provide quantitative measures such as the number of steps taken, exercise duration, or sleep depth.
 
-PMData provides both types of information for the same participants, making it suitable for investigating whether changes in observable daily behavior are associated with changes in self-reported well-being.
+PMData provides more directly measurable daily behavioral and sleep-related indicators collected through wearable devices, including:
+
+* steps,
+* exercise duration,
+* exercise distance,
+* exercise calories,
+* sleep duration,
+* deep sleep,
+* sleep restlessness,
+* sleep composition,
+* and sleep scores.
+
+It also provides self-reported well-being measures for the same participants.
+
+Therefore, PMData was a better fit for constructing personalized behavioral baselines and investigating whether measurable changes in daily behavior and sleep are associated with changes in well-being.
 
 ### Alternative Considered
 
@@ -21,15 +34,49 @@ PMData provides both types of information for the same participants, making it s
 
 ### Why Was It Not Selected?
 
-CASAS provides useful behavioral and sensor information, but it did not provide enough direct self-reported well-being measures for the intended analysis.
+CASAS provides valuable information about daily activity and movement within the home, but many of its behavioral measures are indirect indicators, such as presence in a room or movement between locations.
+
+For this project, we wanted behavioral changes to be represented by measurable quantitative indicators such as steps, exercise, sleep duration, and deep sleep.
+
+PMData therefore provided a stronger match to the research question.
 
 ### Outcome
 
-PMData was selected as the main dataset.
+PMData was selected as the primary dataset.
 
 ---
 
-## 2. Personalized Baseline Instead of a Universal Baseline
+## 2. Main Statistical Objective
+
+### Decision
+
+Use statistical analysis to investigate whether different behavioral and sleep-related elements have meaningful relationships with self-reported well-being.
+
+### Why?
+
+The main statistical question was:
+
+> **Are changes in different measurable behavioral or sleep elements associated with changes in an individual's well-being?**
+
+The project contains multiple behavioral variables and multiple well-being variables.
+
+Therefore, the analysis needed to examine these relationships systematically rather than focusing on only one behavioral measure.
+
+### Alternative Considered
+
+Focus on a single behavioral variable or select specific variables before analyzing the data.
+
+### Why Was It Not Selected?
+
+Pre-selecting a small number of variables could overlook other behavioral or sleep-related elements that may show meaningful individual relationships with well-being.
+
+### Outcome
+
+The analysis examined multiple behavioral × wellness relationships at the participant level.
+
+---
+
+## 3. Personalized Baseline Instead of a Universal Baseline
 
 ### Decision
 
@@ -49,7 +96,7 @@ People naturally differ in:
 
 Therefore, the same absolute value may be normal for one participant but unusual for another.
 
-A personalized baseline better matches the project's goal of individualized well-being monitoring.
+A personalized baseline better matches the project's goal of individualized monitoring.
 
 ### Alternative Considered
 
@@ -65,7 +112,7 @@ Behavioral deviations are evaluated relative to each participant's own baseline.
 
 ---
 
-## 3. Chronological 50/50 Baseline Split
+## 4. Chronological 50/50 Baseline Split
 
 ### Decision
 
@@ -75,12 +122,12 @@ Use the first 50% of each participant's observations to establish the personaliz
 
 The project is concerned with detecting changes over time.
 
-A chronological split allows the system to:
+A chronological split allows the analysis to:
 
 1. learn the person's earlier normal pattern, and
 2. examine whether later observations deviate from that learned pattern.
 
-This better represents the logic of an early-warning system than randomly mixing observations from the entire period.
+This also avoids using later observations to define what was considered normal earlier in time.
 
 ### Alternative Considered
 
@@ -92,11 +139,11 @@ A random split could allow observations from the later period to contribute to t
 
 ### Outcome
 
-The first half is treated as the personalized baseline period and the second half as the analysis period.
+The first half was used for personalized baseline construction and the second half for the main analysis.
 
 ---
 
-## 4. Standardizing Behavioral Deviations with Z-scores
+## 5. Standardizing Behavioral Deviations with Z-scores
 
 ### Decision
 
@@ -104,11 +151,11 @@ Represent daily behavioral deviations using personalized Z-scores.
 
 ### Why?
 
-Different behavioral variables have very different scales and levels of variability.
+The behavioral variables have different scales and different levels of natural variability.
 
-For example, steps, exercise duration, and sleep measures cannot be directly compared using their raw differences.
+For example, steps, exercise duration, and sleep measures cannot be directly compared using their raw differences from baseline.
 
-Standardization allows deviations to be interpreted relative to the individual's typical variability.
+Standardization allows each deviation to be interpreted relative to the individual's typical variability.
 
 ### Alternative Considered
 
@@ -116,15 +163,15 @@ Use raw differences from the baseline only.
 
 ### Why Was It Not Selected?
 
-Raw differences are difficult to compare across variables because each variable has a different scale and variability.
+Raw differences are difficult to compare across variables because the variables have different units and scales.
 
 ### Outcome
 
-Daily behavioral deviations are standardized relative to the participant's baseline distribution.
+Daily behavioral deviations were standardized relative to each participant's baseline distribution.
 
 ---
 
-## 5. Primary Deviation Threshold: |Z| ≥ 2
+## 6. Primary Deviation Threshold: |Z| ≥ 2
 
 ### Decision
 
@@ -152,7 +199,7 @@ Using this threshold, **558 meaningful deviations** were detected across the 16 
 
 ---
 
-## 6. Sensitivity Analysis with |Z| ≥ 1
+## 7. Sensitivity Analysis with |Z| ≥ 1
 
 ### Decision
 
@@ -162,7 +209,7 @@ Run an additional sensitivity analysis using **|Z| ≥ 1**.
 
 The choice of deviation threshold can influence the number of detected behavioral changes.
 
-Testing a less conservative threshold allows us to determine whether the detected changes are highly dependent on the selected threshold.
+Testing a less conservative threshold allows us to examine whether the detected changes are highly dependent on the selected threshold.
 
 ### Alternative Considered
 
@@ -180,17 +227,49 @@ The **|Z| ≥ 2** threshold remains the primary analysis, while **|Z| ≥ 1** is
 
 ---
 
-## 7. Minimum Sample Size: N ≥ 10
+## 8. Handling Incomplete and Unequal Data Availability
 
 ### Decision
 
-Require at least **10 paired observations** for participant-level correlation analysis.
+Account for incomplete data when performing participant-level statistical analyses.
 
 ### Why?
 
-Correlation estimates based on very few observations can be unstable and difficult to interpret.
+Not all participants had complete observations for every behavioral and well-being variable across the entire study period.
 
-A minimum sample-size rule was therefore introduced to avoid interpreting extremely small samples as reliable participant-level relationships.
+As a result, the number of usable paired observations was different for different participant × behavioral × wellness relationships.
+
+The analysis therefore needed to use the available paired observations without discarding an entire participant simply because some observations were missing.
+
+### Alternative Considered
+
+Require complete data for all participants, variables, and days.
+
+### Why Was It Not Selected?
+
+A complete-case approach would discard a substantial amount of usable information because missing observations were not identical across participants and variables.
+
+This would unnecessarily reduce the amount of data available for analysis.
+
+### Outcome
+
+Available paired observations were used for each relationship, while a minimum sample-size criterion was introduced to avoid relying on extremely small samples.
+
+---
+
+## 9. Minimum Sample Size: N ≥ 10
+
+### Decision
+
+Require at least **10 usable paired observations** for participant-level correlation analysis.
+
+### Why?
+
+Because data availability differed across participants and variables, some relationships had very few usable observations.
+
+Correlation estimates based on very small samples can be unstable and difficult to interpret.
+
+A minimum-N rule therefore provided a basic level of statistical reliability while allowing incomplete datasets to remain usable.
 
 ### Alternative Considered
 
@@ -206,15 +285,15 @@ Relationships with fewer than 10 usable paired observations were excluded from i
 
 ---
 
-## 8. Pearson Correlation for Behavioral–Well-Being Associations
+## 10. Pearson Correlation
 
 ### Decision
 
-Use participant-level Pearson correlation to examine associations between behavioral deviations and well-being measures.
+Use participant-level Pearson correlation to examine behavioral–well-being relationships.
 
 ### Why?
 
-The analysis aims to determine whether higher or lower behavioral deviation scores are associated with higher or lower well-being scores within each participant.
+The main statistical objective was to determine whether changes in measurable behavioral or sleep-related elements were associated with changes in well-being within an individual.
 
 Pearson correlation provides a straightforward measure of the strength and direction of a linear association.
 
@@ -224,25 +303,25 @@ Immediately build a machine-learning prediction model.
 
 ### Why Was It Not Selected at This Stage?
 
-Before building a predictive model, it was necessary to establish whether meaningful within-person behavioral–well-being relationships could be observed in the dataset.
+Before developing a predictive model, it was necessary to establish whether meaningful within-person behavioral–well-being relationships could be observed in the dataset.
 
-The initial goal was therefore exploratory and relationship-focused rather than predictive.
+The first stage was therefore relationship-focused rather than predictive.
 
 ### Outcome
 
-Participant-level correlations were calculated for behavioral × wellness variable pairs.
+Participant-level correlations were calculated across behavioral × wellness variable pairs.
 
 ---
 
-## 9. Initial Anomaly-Only Analysis
+## 11. Initial Anomaly-Only Analysis
 
 ### Decision
 
-Initially test behavioral–well-being relationships only on days classified as meaningful behavioral deviations.
+Initially examine behavioral–well-being relationships only on days classified as meaningful behavioral deviations.
 
 ### Why?
 
-This approach directly matched the early-warning concept:
+This directly matched the early-warning idea:
 
 > When behavior becomes unusual for a person, does their well-being also change?
 
@@ -259,15 +338,15 @@ The anomaly-only analysis produced:
 
 This result was not interpreted as evidence that behavioral deviations have no relationship with well-being.
 
-Instead, restricting the analysis to anomaly days substantially reduced the number of available observations and therefore reduced statistical power.
+Instead, restricting the analysis to anomaly days substantially reduced the number of observations and therefore reduced statistical power.
 
 ### Decision After Evaluation
 
-Expand the relationship analysis to the full analysis period while retaining personalized deviations.
+Expand the analysis to the full analysis period while retaining personalized behavioral deviations.
 
 ---
 
-## 10. Full-Period Personalized Deviation Analysis
+## 12. Full-Period Personalized Deviation Analysis
 
 ### Decision
 
@@ -277,7 +356,7 @@ Analyze personalized behavioral deviations across the full analysis period rathe
 
 The full-period approach preserves more observations while maintaining the personalized-deviation framework.
 
-It allows the analysis to ask a broader question:
+It allows the analysis to ask:
 
 > When a person's behavior is relatively higher or lower than their own usual pattern, is that deviation associated with their well-being?
 
@@ -295,7 +374,7 @@ The full-period analysis provided substantially greater statistical power and pr
 
 ---
 
-## 11. Same-Day Analysis
+## 13. Same-Day Analysis
 
 ### Decision
 
@@ -303,29 +382,34 @@ First examine behavioral deviation and well-being measured on the same day.
 
 ### Why?
 
-Same-day analysis provides an initial test of whether departures from a person's normal behavioral pattern are associated with their current self-reported well-being.
+The first statistical step was to determine whether measurable behavioral deviations were associated with well-being at all.
 
-It also provides a baseline for comparison with the later temporal analysis.
+Same-day analysis provides a direct initial assessment of these relationships before introducing a temporal lag.
 
 ### Alternative Considered
 
-Start directly with lagged analysis.
+Start directly with a lagged analysis.
 
 ### Why Was Same-Day Analysis Performed First?
 
-The same-day analysis establishes whether there is an observable relationship before asking whether behavioral deviation precedes a subsequent well-being change.
+Before asking whether behavior precedes a later well-being change, it was useful to first establish whether behavioral deviations showed any observable association with well-being.
 
 ### Outcome
 
-The final daily personalized-deviation analysis produced **44 FDR-significant relationships**.
+The final same-day personalized-deviation analysis produced:
+
+* 1,040 total relationship tests,
+* 935 usable tests after data and validity filtering,
+* 185 raw significant relationships,
+* **44 FDR-significant relationships**.
 
 ---
 
-## 12. Benjamini–Hochberg FDR Correction
+## 14. Benjamini–Hochberg FDR Correction
 
 ### Decision
 
-Apply Benjamini–Hochberg False Discovery Rate correction to the multiple relationship tests.
+Apply the **Benjamini–Hochberg False Discovery Rate (FDR)** correction to the multiple statistical tests.
 
 ### Why?
 
@@ -335,9 +419,9 @@ The analysis examines many combinations of:
 * behavioral variables,
 * and wellness variables.
 
-When many statistical tests are performed, some relationships may appear significant simply by chance.
+When a large number of statistical tests are performed, some relationships may appear significant simply by chance.
 
-FDR correction was therefore used to reduce the risk of reporting false discoveries among the relationships identified as significant.
+Therefore, relying only on raw p-values would increase the risk of reporting false-positive findings.
 
 ### Alternative Considered
 
@@ -345,53 +429,29 @@ Use uncorrected p-values only.
 
 ### Why Was It Not Selected?
 
-Using only raw p-values would increase the risk of reporting false-positive relationships due to the large number of simultaneous tests.
+Uncorrected p-values do not adequately account for the large number of simultaneous tests performed in the analysis.
 
 ### Outcome
 
-FDR-adjusted results were used when determining the primary set of statistically significant relationships.
+FDR-adjusted results were used to identify the primary statistically significant relationships.
+
+The same multiple-testing principle was also applied to the lagged analysis.
 
 ---
 
-## 13. Interpretation of Significant Relationships
+## 15. Individual-Level Interpretation
 
 ### Decision
 
-Interpret statistically significant correlations as **associations**, not causal effects.
+Retain participant-level results rather than relying only on a pooled population-level relationship.
 
 ### Why?
 
-The data are observational, and the correlation analysis does not establish that a behavioral change causes a change in well-being.
+The project is based on personalized monitoring.
 
-Other factors may contribute to the observed relationships.
+The analyses showed that behavioral–well-being relationships can differ substantially between individuals.
 
-### Alternative Considered
-
-Describe significant relationships as causal effects.
-
-### Why Was This Rejected?
-
-The study design and analysis do not provide sufficient evidence for causal inference.
-
-### Outcome
-
-Results are reported as behavioral–well-being associations.
-
----
-
-## 14. Individual-Level Interpretation
-
-### Decision
-
-Retain participant-level results instead of relying only on an overall pooled relationship.
-
-### Why?
-
-The central concept of the project is personalized monitoring.
-
-The analyses showed that relationships between behavioral deviations and well-being can differ substantially between individuals.
-
-This individual heterogeneity is itself relevant to the research question.
+This heterogeneity is itself relevant to the research question.
 
 ### Alternative Considered
 
@@ -407,7 +467,7 @@ Participant-level relationships are retained and interpreted individually.
 
 ---
 
-## 15. Interpreting Repeated Behavioral Patterns
+## 16. Interpreting Repeated Behavioral Patterns
 
 ### Decision
 
@@ -415,9 +475,254 @@ Emphasize behavioral domains that show repeated significant associations across 
 
 ### Why?
 
-The goal is not to assume in advance that one specific behavioral variable is most important.
+The goal was not to assume in advance that one specific behavioral variable was the most important.
 
-Instead, the analysis first identifies which behavioral domains repeatedly show associations with well-being.
+Instead, the analysis was used to identify which behavioral and sleep-related domains repeatedly showed associations with well-being.
 
-Sleep
+Sleep-related and physical-activity measures appeared most repeatedly among the significant relationships.
+
+### Alternative Considered
+
+Pre-select sleep or physical activity as the main variables before analyzing the results.
+
+### Why Was It Not Selected?
+
+Pre-selecting specific domains before examining the results could introduce an unnecessary assumption.
+
+### Outcome
+
+Sleep and physical activity were emphasized based on the observed results, while individual differences were retained.
+
+---
+
+## 17. One-Day Lagged Analysis for Early Detection
+
+### Decision
+
+Add a one-day lagged analysis in which behavioral deviation on day **t** is compared with well-being on day **t+1**.
+
+### Why?
+
+The project is not only interested in whether behavior and well-being are related. It also aims to investigate the possibility of **early detection**.
+
+A same-day relationship does not show whether a behavioral deviation occurs before a later change in well-being.
+
+The lagged analysis introduces temporal ordering:
+
+**Behavioral deviation → following-day well-being**
+
+This makes the analysis more directly relevant to the early-warning objective.
+
+### Alternative Considered
+
+Use only same-day relationships.
+
+### Why Was This Not Sufficient?
+
+Same-day associations cannot establish whether the behavioral change occurred before the well-being measurement.
+
+### Outcome
+
+A one-day lagged analysis was performed across the participant-level behavioral and wellness variables.
+
+---
+
+## 18. Choice of One-Day Lag
+
+### Decision
+
+Use a one-day lag as the initial temporal window.
+
+### Why?
+
+The PMData observations are organized at a daily level, making a one-day window a natural and interpretable temporal unit.
+
+In addition, previous research in community and healthy adult populations has examined prospective relationships between daily behavioral factors such as sleep or physical activity and next-day affect or well-being.
+
+Therefore, a one-day lag provided a theoretically and practically justified first temporal window rather than introducing an arbitrary longer prediction horizon.
+
+### Alternative Considered
+
+Use multiple-day lags without prior justification.
+
+### Why Was This Not Selected?
+
+A longer lag would introduce an additional methodological assumption without a clear justification from the current research design.
+
+### Outcome
+
+The temporal analysis uses:
+
+**Behavior on day t → well-being on day t+1**
+
+---
+
+## 19. Lagged FDR Analysis
+
+### Decision
+
+Apply the same minimum-N criterion and FDR correction to the lagged analysis.
+
+### Why?
+
+The lagged analysis also involves many participant × behavioral × wellness tests.
+
+Therefore, the same approach to incomplete data, minimum sample size, and multiple testing was retained to make the temporal analysis comparable with the same-day analysis.
+
+### Outcome
+
+The lagged analysis produced:
+
+* 1,040 total relationship tests,
+* 871 relationships with N ≥ 10,
+* 64 raw significant relationships,
+* **4 FDR-significant relationships**.
+
+All four FDR-significant relationships were observed for participant **p01** and next-day **readiness**.
+
+---
+
+## 20. Interpretation of Lagged Findings
+
+### Decision
+
+Interpret the lagged significant relationships as preliminary evidence of potential next-day early-warning associations.
+
+### Why?
+
+The behavioral deviation was measured one day before the well-being measurement, providing temporal ordering.
+
+However, the analysis remains correlational and participant-specific.
+
+### Outcome
+
+The four significant lagged relationships are treated as evidence supporting the **potential** of personalized behavioral monitoring as an early-warning approach.
+
+They are not interpreted as proof of a validated prediction system.
+
+---
+
+## 21. Early Detection vs. Prediction
+
+### Decision
+
+Do not claim that the current analysis constitutes a fully validated predictive AI model.
+
+### Why?
+
+The current work demonstrates:
+
+* personalized baseline learning,
+* behavioral deviation detection,
+* statistical association analysis,
+* and temporal/lagged relationships.
+
+However, it does not include a trained predictive model evaluated on unseen future outcomes using formal predictive performance metrics.
+
+### Outcome
+
+The project's current claim is limited to:
+
+> **Personalized behavioral deviations show associations with well-being and provide preliminary evidence for potential early-warning signals.**
+
+The project does not claim clinical prediction or diagnosis.
+
+---
+
+## 22. Handling Individual Heterogeneity
+
+### Decision
+
+Treat participant heterogeneity as an important finding rather than as noise to be removed.
+
+### Why?
+
+The project's central premise is that behavioral patterns and well-being can differ between individuals.
+
+If different participants show different behavioral–well-being relationships, this supports the need for personalized monitoring.
+
+### Outcome
+
+The results are not interpreted as evidence that one behavioral variable has the same relationship with well-being for everyone.
+
+---
+
+## 23. Final Methodological Framework
+
+### Decision
+
+Use the following framework for the current project:
+
+**Personal data → Personalized baseline → Daily behavioral deviation → Change detection → Same-day association analysis → FDR correction → One-day lagged analysis → FDR correction → Individual-level interpretation**
+
+### Why?
+
+This sequence follows the research question step by step:
+
+1. identify what is normal for each individual,
+2. detect departures from that normal pattern,
+3. examine whether behavioral deviations are associated with well-being,
+4. test same-day relationships,
+5. and finally investigate whether behavioral deviations precede next-day well-being changes.
+
+### Outcome
+
+The framework provides a reproducible personalized early-warning analysis while avoiding unsupported claims of causality or validated prediction.
+
+---
+
+## 24. Overall Research Conclusion
+
+The current analysis supports the following methodological conclusion:
+
+> **A personalized baseline can be used to identify deviations in an individual's daily behavioral patterns. These personalized deviations show associations with self-reported well-being, with sleep and physical activity emerging as the most repeatedly associated behavioral domains. The one-day lagged analysis identified a smaller set of next-day relationships, providing preliminary evidence that personalized behavioral deviations may have potential as early-warning signals.**
+
+At the same time, the findings demonstrate substantial individual heterogeneity and do not establish causality or validated predictive performance.
+
+---
+
+## 25. Limitations
+
+The following limitations are explicitly retained:
+
+* The dataset contains 16 participants.
+* Some participants had incomplete observations across variables and days.
+* The number of usable observations differed between relationships.
+* The analysis is observational.
+* Correlation does not establish causality.
+* A one-day lag provides temporal ordering but is not equivalent to predictive modeling.
+* The anomaly-only analysis had limited statistical power.
+* Significant relationships varied across participants.
+* Results may depend on the selected baseline period and deviation threshold.
+* The current framework does not constitute a clinical diagnostic system.
+
+---
+
+## 26. Project Status
+
+### Completed
+
+* Dataset selection and preparation
+* Personalized baseline construction
+* Chronological baseline/analysis split
+* Personalized behavioral deviation calculation
+* Z-score standardization
+* Primary change detection
+* Sensitivity analysis
+* Handling of incomplete data
+* Minimum-N filtering
+* Same-day personalized deviation analysis
+* Pearson correlation analysis
+* Benjamini–Hochberg FDR correction
+* One-day lagged analysis
+* Lagged FDR correction
+* Participant-level interpretation
+* Reproducible Git-based project structure
+
+### Documentation to Complete
+
+* Finalize the research report
+* Document methods, formulas, and implementation details in the report
+* Consolidate final findings, limitations, and implications
+* Finalize the project README
 
