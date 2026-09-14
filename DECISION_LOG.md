@@ -726,3 +726,23 @@ The following limitations are explicitly retained:
 * Consolidate final findings, limitations, and implications
 * Finalize the project README
 
+### 19A. Previous 7-Day History Analysis
+
+**Decision**
+Add a seven-day history analysis to examine whether recent behavior and sleep are related to current well-being.
+
+**Why?**
+In the papers we reviewed, seven-day daily data were used to study relationships between sleep, mood, fatigue, stress, and other well-being measures. These studies showed that looking at several days can help examine recent changes, rather than only one day.
+
+Based on this, we added the previous seven days as an exploratory analysis.
+
+For each day, we calculated the mean of the available behavioral and sleep data from the previous seven days, excluding the current day.
+
+**Outcome**
+
+* 1,035 total tests
+* 1,010 tests with N ≥ 10
+* 162 raw significant relationships
+* 42 FDR-significant relationships
+
+The seven-day window was used as an exploratory approach, not as a proven best window.
