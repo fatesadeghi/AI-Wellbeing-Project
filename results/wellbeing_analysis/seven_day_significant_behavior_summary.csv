@@ -1,0 +1,14 @@
+Behavioral_Variable,Significant_Relationships,Participants,Mean_Abs_r,Mean_r
+Exercise_Distance,7,5,0.33,-0.244
+Exercise_Count,6,4,0.347,-0.139
+Steps,6,5,0.357,0.078
+Exercise_Duration,4,3,0.347,0.004
+Exercise_Avg_HR,4,4,0.334,-0.334
+Sleep_Restlessness,3,2,0.325,-0.12
+Deep_Sleep_Minutes,2,2,0.326,-0.002
+Exercise_Calories,2,2,0.371,0.371
+Sleep_Duration_Score,2,1,0.355,0.355
+Sleep_Revitalization,2,1,0.301,-0.301
+Sleep_Score,2,2,0.274,-0.005
+Sleep_Hours,1,1,0.273,-0.273
+Sleep_Composition,1,1,0.277,-0.277
