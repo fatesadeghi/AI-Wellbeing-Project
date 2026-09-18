@@ -588,4 +588,3 @@ print(excluded_output)
 
 print()
 print("=" * 70)
-```
