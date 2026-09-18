@@ -4,11 +4,23 @@ import numpy as np
 
 
 # ============================================================
-# 01 - BUILD PERSONALIZED BASELINE AND DAILY Z-SCORES
+# 1. PROJECT PATHS
 # ============================================================
 
+# This file is located at:
+# AI-Wellbeing-Project/final/Code/01_build_baseline.py
+#
+# Therefore:
+# dirname(__file__)              -> final/Code
+# dirname(dirname(__file__))     -> final
+# dirname(dirname(dirname(...))) -> AI-Wellbeing-Project
+
 BASE_DIR = os.path.dirname(
-    os.path.dirname(os.path.abspath(__file__))
+    os.path.dirname(
+        os.path.dirname(
+            os.path.abspath(__file__)
+        )
+    )
 )
 
 DATA_DIR = os.path.join(
@@ -23,15 +35,15 @@ OUTPUT_DIR = os.path.join(
     "baseline"
 )
 
+
+# ============================================================
+# 2. SETTINGS
+# ============================================================
+
 BASELINE_FRACTION = 0.50
 MIN_BASELINE_N = 7
 
-
-# ============================================================
-# VARIABLES
-# ============================================================
-
-BEHAVIORAL_VARIABLES = [
+BEHAVIOR_VARIABLES = [
     "Steps",
     "Exercise_Count",
     "Exercise_Duration",
@@ -44,20 +56,20 @@ BEHAVIORAL_VARIABLES = [
     "Sleep_Restlessness",
     "Sleep_Composition",
     "Sleep_Revitalization",
-    "Sleep_Score"
+    "Sleep_Score",
 ]
 
-WELLNESS_VARIABLES = [
+WELLBEING_VARIABLES = [
     "fatigue",
     "mood",
     "readiness",
     "sleep_quality",
-    "stress"
+    "stress",
 ]
 
 
 # ============================================================
-# SETUP
+# 3. CREATE OUTPUT DIRECTORY
 # ============================================================
 
 os.makedirs(
@@ -65,40 +77,91 @@ os.makedirs(
     exist_ok=True
 )
 
+
+# ============================================================
+# 4. CHECK DATA DIRECTORY
+# ============================================================
+
 print("=" * 70)
 print("PERSONALIZED BASELINE AND DAILY Z-SCORES")
 print("=" * 70)
 
-print(f"Data directory: {DATA_DIR}")
-print(f"Baseline fraction: {BASELINE_FRACTION}")
-print(f"Minimum baseline observations: {MIN_BASELINE_N}")
-
-
-# ============================================================
-# LOAD PARTICIPANT FILES
-# ============================================================
-
-participant_files = sorted(
-    filename
-    for filename in os.listdir(DATA_DIR)
-    if filename.endswith("_daily_merged.csv")
+print(
+    f"Project directory: {BASE_DIR}"
 )
 
 print(
-    f"\nParticipant files found: "
-    f"{len(participant_files)}"
+    f"Data directory: {DATA_DIR}"
 )
 
+print(
+    f"Output directory: {OUTPUT_DIR}"
+)
 
-baseline_records = []
-deviation_records = []
+print(
+    f"Baseline fraction: {BASELINE_FRACTION}"
+)
 
-participants_processed = 0
-participants_skipped = 0
+print(
+    f"Minimum baseline observations: {MIN_BASELINE_N}"
+)
+
+print()
+
+
+if not os.path.exists(DATA_DIR):
+
+    raise FileNotFoundError(
+        f"\nData directory not found:\n{DATA_DIR}\n\n"
+        "Expected structure:\n"
+        "AI-Wellbeing-Project/\n"
+        "├── data/\n"
+        "│   └── pmdata/\n"
+        "└── final/\n"
+        "    └── Code/\n"
+        "        └── 01_build_baseline.py"
+    )
 
 
 # ============================================================
-# PROCESS EACH PARTICIPANT
+# 5. FIND PARTICIPANT FILES
+# ============================================================
+
+participant_files = sorted(
+    [
+        filename
+        for filename in os.listdir(DATA_DIR)
+        if filename.endswith("_daily_merged.csv")
+    ]
+)
+
+
+if not participant_files:
+
+    raise RuntimeError(
+        f"No participant files found in:\n{DATA_DIR}\n\n"
+        "Expected files such as:\n"
+        "p01_daily_merged.csv"
+    )
+
+
+print(
+    f"Participant files found: {len(participant_files)}"
+)
+
+print()
+
+
+# ============================================================
+# 6. STORAGE
+# ============================================================
+
+baseline_results = []
+daily_results = []
+
+
+# ============================================================
+# 7. PROCESS EACH PARTICIPANT
 # ============================================================
 
 for filename in participant_files:
@@ -113,19 +176,32 @@ for filename in participant_files:
         filename
     )
 
-    df = pd.read_csv(filepath)
+    print(
+        f"Processing {participant}..."
+    )
+
+    # --------------------------------------------------------
+    # LOAD DATA
+    # --------------------------------------------------------
+
+    df = pd.read_csv(
+        filepath
+    )
+
+    # --------------------------------------------------------
+    # CHECK DATE
+    # --------------------------------------------------------
 
     if "Date" not in df.columns:
 
         print(
-            f"{participant}: skipped - no Date column"
+            f"  Skipped: Date column not found."
         )
 
-        participants_skipped += 1
         continue
 
     # --------------------------------------------------------
-    # Date cleaning
+    # PREPARE DATE
     # --------------------------------------------------------
 
     df["Date"] = pd.to_datetime(
@@ -135,109 +211,116 @@ for filename in participant_files:
 
     df = df.dropna(
         subset=["Date"]
-    )
+    ).copy()
 
+    # Sort chronologically.
     df = df.sort_values(
         "Date"
-    )
+    ).reset_index(drop=True)
 
-    # Remove duplicate dates
-    duplicate_count = (
-        df["Date"].duplicated()
-        .sum()
-    )
+    # Remove duplicate dates.
+    df = df.drop_duplicates(
+        subset=["Date"],
+        keep="first"
+    ).reset_index(drop=True)
 
-    if duplicate_count > 0:
+    # --------------------------------------------------------
+    # CHECK NUMBER OF OBSERVATIONS
+    # --------------------------------------------------------
 
-        print(
-            f"{participant}: "
-            f"removed {duplicate_count} duplicate date rows"
-        )
+    n_total = len(df)
 
-        df = df.drop_duplicates(
-            subset=["Date"],
-            keep="first"
-        )
-
-    df = df.reset_index(
-        drop=True
-    )
-
-    total_days = len(df)
-
-    if total_days < 2:
+    if n_total < 2:
 
         print(
-            f"{participant}: skipped - insufficient data"
+            f"  Skipped: only {n_total} valid days."
         )
 
-        participants_skipped += 1
         continue
 
     # --------------------------------------------------------
-    # Define baseline and analysis periods
+    # 50/50 CHRONOLOGICAL SPLIT
     # --------------------------------------------------------
 
-    split_index = int(
-        total_days * BASELINE_FRACTION
+    baseline_n = int(
+        np.floor(
+            n_total * BASELINE_FRACTION
+        )
     )
 
+    if baseline_n < MIN_BASELINE_N:
+
+        print(
+            f"  Skipped: baseline has only "
+            f"{baseline_n} observations "
+            f"(minimum = {MIN_BASELINE_N})."
+        )
+
+        continue
+
     baseline_df = df.iloc[
-        :split_index
+        :baseline_n
     ].copy()
 
     analysis_df = df.iloc[
-        split_index:
+        baseline_n:
     ].copy()
 
-    print(
-        f"{participant}: "
-        f"total={total_days}, "
-        f"baseline={len(baseline_df)}, "
-        f"analysis={len(analysis_df)}"
-    )
-
-    if len(baseline_df) < MIN_BASELINE_N:
+    if analysis_df.empty:
 
         print(
-            f"{participant}: skipped - "
-            f"baseline has fewer than "
-            f"{MIN_BASELINE_N} observations"
+            "  Skipped: no analysis-period data."
         )
 
-        participants_skipped += 1
         continue
 
     # --------------------------------------------------------
-    # Calculate personalized baseline statistics
+    # BASELINE DATE INFORMATION
+    # --------------------------------------------------------
+
+    baseline_start = (
+        baseline_df["Date"].min()
+    )
+
+    baseline_end = (
+        baseline_df["Date"].max()
+    )
+
+    analysis_start = (
+        analysis_df["Date"].min()
+    )
+
+    analysis_end = (
+        analysis_df["Date"].max()
+    )
+
+    # --------------------------------------------------------
+    # BASELINE STATISTICS
     # --------------------------------------------------------
 
     baseline_record = {
         "Participant": participant,
-        "Baseline_N": len(baseline_df),
-        "Baseline_Start": baseline_df["Date"].min(),
-        "Baseline_End": baseline_df["Date"].max(),
-        "Analysis_Start": analysis_df["Date"].min(),
-        "Analysis_End": analysis_df["Date"].max()
+        "Total_N": n_total,
+        "Baseline_N": baseline_n,
+        "Analysis_N": len(analysis_df),
+        "Baseline_Start": baseline_start,
+        "Baseline_End": baseline_end,
+        "Analysis_Start": analysis_start,
+        "Analysis_End": analysis_end,
     }
 
-    baseline_stats = {}
+    # --------------------------------------------------------
+    # BEHAVIOR + WELLBEING BASELINE
+    # --------------------------------------------------------
 
-    all_variables = (
-        BEHAVIORAL_VARIABLES
-        + WELLNESS_VARIABLES
+    all_baseline_variables = (
+        BEHAVIOR_VARIABLES
+        + WELLBEING_VARIABLES
     )
 
-    for variable in all_variables:
+    for variable in all_baseline_variables:
 
-        if variable not in df.columns:
-
-            baseline_stats[variable] = {
-                "Mean": np.nan,
-                "Median": np.nan,
-                "SD": np.nan,
-                "N": 0
-            }
+        if variable not in baseline_df.columns:
 
             baseline_record[
                 f"{variable}_Mean"
@@ -260,206 +343,305 @@ for filename in participant_files:
         values = pd.to_numeric(
             baseline_df[variable],
             errors="coerce"
-        ).dropna()
+        )
 
-        n = len(values)
+        valid_values = values.dropna()
 
-        if n == 0:
+        n_valid = len(valid_values)
 
-            mean = np.nan
-            median = np.nan
-            sd = np.nan
+        if n_valid == 0:
 
-        elif n == 1:
-
-            mean = values.mean()
-            median = values.median()
-            sd = np.nan
+            mean_value = np.nan
+            median_value = np.nan
+            sd_value = np.nan
 
         else:
 
-            mean = values.mean()
-            median = values.median()
-            sd = values.std(
-                ddof=1
-            )
+            mean_value = valid_values.mean()
 
-        # A zero SD cannot produce a meaningful Z-score
-        if pd.notna(sd) and sd <= 0:
-            sd = np.nan
+            median_value = valid_values.median()
 
-        baseline_stats[variable] = {
-            "Mean": mean,
-            "Median": median,
-            "SD": sd,
-            "N": n
-        }
+            if n_valid >= 2:
+
+                sd_value = valid_values.std(
+                    ddof=1
+                )
+
+            else:
+
+                sd_value = np.nan
+
+        # A zero or negative SD cannot be used
+        # for a meaningful Z-score.
+        if pd.notna(sd_value) and sd_value <= 0:
+
+            sd_value = np.nan
 
         baseline_record[
             f"{variable}_Mean"
-        ] = mean
+        ] = mean_value
 
         baseline_record[
             f"{variable}_Median"
-        ] = median
+        ] = median_value
 
         baseline_record[
             f"{variable}_SD"
-        ] = sd
+        ] = sd_value
 
         baseline_record[
             f"{variable}_N"
-        ] = n
+        ] = n_valid
 
-    baseline_records.append(
+    baseline_results.append(
         baseline_record
     )
 
     # --------------------------------------------------------
-    # Calculate daily personalized deviations
+    # DAILY ANALYSIS-PERIOD VALUES
     # --------------------------------------------------------
 
     for _, row in analysis_df.iterrows():
 
-        record = {
+        daily_record = {
             "Participant": participant,
-            "Date": row["Date"]
+            "Date": row["Date"],
         }
 
-        for variable in all_variables:
+        # ----------------------------------------------------
+        # BEHAVIORAL VARIABLES
+        # ----------------------------------------------------
 
-            value = np.nan
+        for variable in BEHAVIOR_VARIABLES:
 
-            if variable in df.columns:
+            if variable not in df.columns:
 
-                value = pd.to_numeric(
-                    row[variable],
-                    errors="coerce"
-                )
+                daily_record[
+                    f"{variable}_Value"
+                ] = np.nan
 
-            mean = baseline_stats[
-                variable
-            ]["Mean"]
+                daily_record[
+                    f"{variable}_Deviation"
+                ] = np.nan
 
-            median = baseline_stats[
-                variable
-            ]["Median"]
+                daily_record[
+                    f"{variable}_Z"
+                ] = np.nan
 
-            sd = baseline_stats[
-                variable
-            ]["SD"]
+                daily_record[
+                    f"{variable}_Abs_Z"
+                ] = np.nan
 
-            # Raw deviation from personal baseline median
-            if (
-                pd.notna(value)
-                and pd.notna(median)
-            ):
+                continue
+
+            value = pd.to_numeric(
+                pd.Series([row[variable]]),
+                errors="coerce"
+            ).iloc[0]
+
+            mean_value = baseline_record[
+                f"{variable}_Mean"
+            ]
+
+            median_value = baseline_record[
+                f"{variable}_Median"
+            ]
+
+            sd_value = baseline_record[
+                f"{variable}_SD"
+            ]
+
+            # Raw deviation from personalized baseline median.
+            if pd.notna(value) and pd.notna(median_value):
 
                 deviation = (
-                    value - median
+                    value - median_value
                 )
 
             else:
 
                 deviation = np.nan
 
-            # Standardized deviation from personal baseline mean
+            # Z-score based on personalized baseline mean/SD.
             if (
                 pd.notna(value)
-                and pd.notna(mean)
-                and pd.notna(sd)
-                and sd > 0
+                and pd.notna(mean_value)
+                and pd.notna(sd_value)
+                and sd_value > 0
             ):
 
-                z = (
-                    value - mean
-                ) / sd
+                z_score = (
+                    value - mean_value
+                ) / sd_value
 
             else:
 
-                z = np.nan
+                z_score = np.nan
 
-            record[
+            daily_record[
                 f"{variable}_Value"
             ] = value
 
-            record[
+            daily_record[
                 f"{variable}_Deviation"
             ] = deviation
 
-            record[
+            daily_record[
                 f"{variable}_Z"
-            ] = z
+            ] = z_score
 
-            record[
+            daily_record[
                 f"{variable}_Abs_Z"
             ] = (
-                abs(z)
-                if pd.notna(z)
+                abs(z_score)
+                if pd.notna(z_score)
                 else np.nan
             )
 
-        deviation_records.append(
-            record
-        )
+        # ----------------------------------------------------
+        # WELLBEING VARIABLES
+        # ----------------------------------------------------
 
-    participants_processed += 1
+        for variable in WELLBEING_VARIABLES:
+
+            if variable not in df.columns:
+
+                daily_record[
+                    f"{variable}_Value"
+                ] = np.nan
+
+                daily_record[
+                    f"{variable}_Z"
+                ] = np.nan
+
+                continue
+
+            value = pd.to_numeric(
+                pd.Series([row[variable]]),
+                errors="coerce"
+            ).iloc[0]
+
+            mean_value = baseline_record[
+                f"{variable}_Mean"
+            ]
+
+            sd_value = baseline_record[
+                f"{variable}_SD"
+            ]
+
+            if (
+                pd.notna(value)
+                and pd.notna(mean_value)
+                and pd.notna(sd_value)
+                and sd_value > 0
+            ):
+
+                z_score = (
+                    value - mean_value
+                ) / sd_value
+
+            else:
+
+                z_score = np.nan
+
+            daily_record[
+                f"{variable}_Value"
+            ] = value
+
+            daily_record[
+                f"{variable}_Z"
+            ] = z_score
+
+        daily_results.append(
+            daily_record
+        )
 
 
 # ============================================================
-# CREATE OUTPUT DATAFRAMES
+# 8. CREATE OUTPUT DATAFRAMES
 # ============================================================
 
 baseline_df = pd.DataFrame(
-    baseline_records
+    baseline_results
 )
 
-deviation_df = pd.DataFrame(
-    deviation_records
+daily_deviation_df = pd.DataFrame(
+    daily_results
 )
 
 
 # ============================================================
-# SAVE OUTPUTS
+# 9. CHECK RESULTS
 # ============================================================
 
-baseline_file = os.path.join(
+if baseline_df.empty:
+
+    raise RuntimeError(
+        "No participants passed the baseline criteria."
+    )
+
+if daily_deviation_df.empty:
+
+    raise RuntimeError(
+        "No analysis-period observations were created."
+    )
+
+
+# ============================================================
+# 10. SORT RESULTS
+# ============================================================
+
+baseline_df = baseline_df.sort_values(
+    "Participant"
+).reset_index(drop=True)
+
+daily_deviation_df = daily_deviation_df.sort_values(
+    ["Participant", "Date"]
+).reset_index(drop=True)
+
+
+# ============================================================
+# 11. SAVE BASELINE RESULTS
+# ============================================================
+
+baseline_output = os.path.join(
     OUTPUT_DIR,
     "personalized_baselines.csv"
 )
 
-deviation_file = os.path.join(
+baseline_df.to_csv(
+    baseline_output,
+    index=False
+)
+
+
+# ============================================================
+# 12. SAVE DAILY DEVIATIONS
+# ============================================================
+
+daily_output = os.path.join(
     OUTPUT_DIR,
     "daily_personalized_deviations.csv"
 )
 
-baseline_df.to_csv(
-    baseline_file,
-    index=False
-)
-
-deviation_df.to_csv(
-    deviation_file,
+daily_deviation_df.to_csv(
+    daily_output,
     index=False
 )
 
 
 # ============================================================
-# SUMMARY
+# 13. FINAL SUMMARY
 # ============================================================
 
-print("\n" + "=" * 70)
-print("BASELINE CONSTRUCTION COMPLETE")
+print()
+print("=" * 70)
+print("BASELINE CONSTRUCTION COMPLETED")
 print("=" * 70)
 
 print(
-    f"Participants processed: "
-    f"{participants_processed}"
-)
-
-print(
-    f"Participants skipped: "
-    f"{participants_skipped}"
+    f"Participants included: "
+    f"{baseline_df['Participant'].nunique()}"
 )
 
 print(
@@ -468,12 +650,21 @@ print(
 )
 
 print(
-    f"Analysis-period daily records: "
-    f"{len(deviation_df)}"
+    f"Analysis-day records: "
+    f"{len(daily_deviation_df)}"
 )
 
-print("\nOutput files:")
-print(baseline_file)
-print(deviation_file)
+print()
+print(
+    "Saved:"
+)
+
+print(
+    f"  {baseline_output}"
+)
+
+print(
+    f"  {daily_output}"
+)
 
 print("=" * 70)
