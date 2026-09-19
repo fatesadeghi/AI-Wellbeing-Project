@@ -108,15 +108,12 @@ def safe_pearson(x, y, min_n=MIN_N):
         dtype=float
     )
 
-    # Prevent invalid Pearson calculations.
     if not np.isfinite(x_values).all():
         return np.nan, np.nan, n
 
     if not np.isfinite(y_values).all():
         return np.nan, np.nan, n
 
-    # Pearson correlation is undefined
-    # when either variable is constant.
     if np.std(x_values, ddof=1) == 0:
         return np.nan, np.nan, n
 
@@ -222,10 +219,6 @@ for filename in participant_files:
     if n_total == 0:
         continue
 
-    # --------------------------------------------------------
-    # Same chronological 50/50 split as baseline construction
-    # --------------------------------------------------------
-
     baseline_n = int(
         np.floor(
             n_total * BASELINE_FRACTION
@@ -246,10 +239,6 @@ for filename in participant_files:
 
     if analysis_df.empty:
         continue
-
-    # --------------------------------------------------------
-    # Keep available wellbeing variables
-    # --------------------------------------------------------
 
     available_wellbeing = [
         variable
@@ -309,14 +298,8 @@ wellbeing_next = wellbeing.copy()
 # Shift wellbeing backward by one day so that:
 #
 # behavioral deviation on day t
-#        matches
+# matches
 # wellbeing on day t+1
-#
-# Example:
-# wellbeing on Jan 10
-# becomes Date = Jan 9
-#
-# Therefore it merges with behavior on Jan 9.
 
 wellbeing_next["Date"] = (
     wellbeing_next["Date"]
