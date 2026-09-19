@@ -5,35 +5,57 @@ from scipy.stats import pearsonr
 
 
 # ============================================================
-# SETTINGS
+# PATHS
 # ============================================================
 
-DATA_DIR = "data/pmdata"
+BASE_DIR = os.path.dirname(
+    os.path.dirname(
+        os.path.abspath(__file__)
+    )
+)
 
-OUTPUT_DIR = "results/seven_day"
+DATA_DIR = os.path.join(
+    BASE_DIR,
+    "data",
+    "pmdata"
+)
+
+OUTPUT_DIR = os.path.join(
+    BASE_DIR,
+    "results",
+    "seven_day"
+)
 
 OUTPUT_FILE = os.path.join(
     OUTPUT_DIR,
     "seven_day_history_wellbeing_relationships.csv"
 )
 
+
+# ============================================================
+# SETTINGS
+# ============================================================
+
 MIN_N = 10
 MIN_HISTORY_DAYS = 7
 
+BASELINE_FRACTION = 0.50
+MIN_BASELINE_N = 7
+
+
+# ============================================================
+# VARIABLES
+# ============================================================
+
 BEHAVIOR_VARIABLES = [
     "Steps",
-    "Exercise_Count",
-    "Exercise_Duration",
+    "Sleep_Duration_Score",
+    "Sleep_Score",
+    "Sleep_Deep_Minutes",
+    "Sleep_Restlessness",
     "Exercise_Distance",
     "Exercise_Calories",
-    "Exercise_Avg_HR",
-    "Sleep_Hours",
-    "Sleep_Duration_Score",
-    "Deep_Sleep_Minutes",
-    "Sleep_Restlessness",
-    "Sleep_Composition",
-    "Sleep_Revitalization",
-    "Sleep_Score",
+    "Exercise_Duration",
 ]
 
 WELLBEING_VARIABLES = [
@@ -46,7 +68,7 @@ WELLBEING_VARIABLES = [
 
 
 # ============================================================
-# PEARSON FUNCTION
+# SAFE PEARSON
 # ============================================================
 
 def safe_pearson(x, y):
@@ -61,8 +83,23 @@ def safe_pearson(x, y):
     if n < MIN_N:
         return np.nan, np.nan, n
 
-    x_values = data.iloc[:, 0].astype(float).values
-    y_values = data.iloc[:, 1].astype(float).values
+    x_values = (
+        data.iloc[:, 0]
+        .astype(float)
+        .values
+    )
+
+    y_values = (
+        data.iloc[:, 1]
+        .astype(float)
+        .values
+    )
+
+    if not np.all(np.isfinite(x_values)):
+        return np.nan, np.nan, n
+
+    if not np.all(np.isfinite(y_values)):
+        return np.nan, np.nan, n
 
     if np.std(x_values, ddof=1) == 0:
         return np.nan, np.nan, n
@@ -71,6 +108,7 @@ def safe_pearson(x, y):
         return np.nan, np.nan, n
 
     try:
+
         r, p = pearsonr(
             x_values,
             y_values
@@ -79,6 +117,7 @@ def safe_pearson(x, y):
         return r, p, n
 
     except Exception:
+
         return np.nan, np.nan, n
 
 
@@ -88,11 +127,16 @@ def safe_pearson(x, y):
 
 print("Loading participant data...")
 
-participant_files = [
+if not os.path.isdir(DATA_DIR):
+    raise RuntimeError(
+        f"Data directory not found: {DATA_DIR}"
+    )
+
+participant_files = sorted([
     f
     for f in os.listdir(DATA_DIR)
     if f.endswith("_daily_merged.csv")
-]
+])
 
 if not participant_files:
     raise RuntimeError(
@@ -105,6 +149,7 @@ if not participant_files:
 # ============================================================
 
 results = []
+
 
 for filename in participant_files:
 
@@ -125,11 +170,14 @@ for filename in participant_files:
     df = pd.read_csv(filepath)
 
     if "Date" not in df.columns:
+
         print(
             f"Skipping {participant}: "
             "Date column not found."
         )
+
         continue
+
 
     # --------------------------------------------------------
     # DATE PREPARATION
@@ -153,21 +201,26 @@ for filename in participant_files:
         keep="first"
     ).reset_index(drop=True)
 
+
     n_total = len(df)
 
     if n_total < 2:
         continue
+
 
     # --------------------------------------------------------
     # SAME 50/50 SPLIT AS BASELINE CODE
     # --------------------------------------------------------
 
     baseline_n = int(
-        np.floor(n_total * 0.50)
+        np.floor(
+            n_total * BASELINE_FRACTION
+        )
     )
 
-    if baseline_n < 7:
+    if baseline_n < MIN_BASELINE_N:
         continue
+
 
     analysis_df = df.iloc[
         baseline_n:
@@ -176,8 +229,9 @@ for filename in participant_files:
     if analysis_df.empty:
         continue
 
+
     # --------------------------------------------------------
-    # CREATE 7-DAY HISTORY
+    # CREATE PREVIOUS 7-DAY HISTORY
     # --------------------------------------------------------
 
     for behavior in BEHAVIOR_VARIABLES:
@@ -185,16 +239,6 @@ for filename in participant_files:
         if behavior not in analysis_df.columns:
             continue
 
-        # Previous 7 observations/days.
-        #
-        # shift(1):
-        #   excludes the current day.
-        #
-        # rolling(7):
-        #   uses the previous 7 observations.
-        #
-        # min_periods=7:
-        #   requires a complete 7-day history.
         analysis_df[
             f"{behavior}_7day_history"
         ] = (
@@ -207,8 +251,9 @@ for filename in participant_files:
             .mean()
         )
 
+
     # --------------------------------------------------------
-    # CALCULATE PARTICIPANT-LEVEL CORRELATIONS
+    # PARTICIPANT-LEVEL CORRELATIONS
     # --------------------------------------------------------
 
     for behavior in BEHAVIOR_VARIABLES:
@@ -219,6 +264,7 @@ for filename in participant_files:
 
         if history_column not in analysis_df.columns:
             continue
+
 
         for wellbeing in WELLBEING_VARIABLES:
 
@@ -239,29 +285,37 @@ for filename in participant_files:
             )
 
             results.append({
+
                 "Participant": participant,
+
                 "Behavioral_Variable": behavior,
+
                 "Wellbeing_Variable": wellbeing,
+
                 "Time_Window": "previous_7_days",
+
                 "r": r,
+
                 "p": p,
+
                 "N": n,
+
                 "Included": (
                     "Yes"
                     if n >= MIN_N
                     else "No"
                 )
+
             })
 
 
 # ============================================================
-# CREATE RESULTS DATAFRAME
+# RESULTS DATAFRAME
 # ============================================================
 
 results_df = pd.DataFrame(
     results
 )
-
 
 if results_df.empty:
     raise RuntimeError(
@@ -292,6 +346,7 @@ included = results_df[
     results_df["Included"] == "Yes"
 ]
 
+
 print()
 print("=" * 60)
 print("7-DAY HISTORY ANALYSIS COMPLETED")
@@ -313,7 +368,8 @@ print(
 )
 
 print(
-    f"Output saved to:\n{OUTPUT_FILE}"
+    f"Output saved to:\n"
+    f"{OUTPUT_FILE}"
 )
 
 print("=" * 60)
