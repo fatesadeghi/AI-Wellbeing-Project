@@ -1,0 +1,5 @@
+Analysis,Total_Tests,Valid_Tests_N>=10,Raw_Significant_p<0.05,FDR_Significant_pFDR<0.05
+same_day,1040,900,180,43
+lagged,1040,860,63,4
+seven_day,1040,794,103,6
+sensitivity_Z1,1040,887,182,47
