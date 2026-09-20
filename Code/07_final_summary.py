@@ -1,51 +1,35 @@
 import os
 import pandas as pd
-import numpy as np
 
 
 # ============================================================
-# 1. PROJECT PATHS
+# 1. PATHS
 # ============================================================
+
+# Current file:
+# AI-Wellbeing-Project/Code/07_final_summary.py
 
 BASE_DIR = os.path.dirname(
     os.path.dirname(
-        os.path.dirname(
-            os.path.abspath(__file__)
-        )
+        os.path.abspath(__file__)
     )
 )
 
-INPUT_FILE = os.path.join(
+RESULTS_DIR = os.path.join(
     BASE_DIR,
-    "results",
+    "results"
+)
+
+FDR_FILE = os.path.join(
+    RESULTS_DIR,
     "fdr",
     "all_final_fdr_results.csv"
 )
 
 OUTPUT_DIR = os.path.join(
-    BASE_DIR,
-    "results",
-    "final_summary"
+    RESULTS_DIR,
+    "Final_Summary"
 )
-
-
-# ============================================================
-# 2. SETTINGS
-# ============================================================
-
-ALPHA = 0.05
-
-
-# ============================================================
-# 3. CHECK INPUT
-# ============================================================
-
-if not os.path.exists(INPUT_FILE):
-
-    raise FileNotFoundError(
-        f"FDR results file not found:\n{INPUT_FILE}"
-    )
-
 
 os.makedirs(
     OUTPUT_DIR,
@@ -54,391 +38,264 @@ os.makedirs(
 
 
 # ============================================================
-# 4. LOAD RESULTS
+# 2. LOAD FINAL FDR RESULTS
 # ============================================================
 
+if not os.path.exists(FDR_FILE):
+    raise FileNotFoundError(
+        f"FDR results file not found:\n{FDR_FILE}"
+    )
+
+df = pd.read_csv(FDR_FILE)
+
 print("=" * 70)
-print("FINAL FDR SUMMARY")
+print("FINAL SUMMARY")
 print("=" * 70)
 
 print(
-    f"Input:\n{INPUT_FILE}"
-)
-
-df = pd.read_csv(
-    INPUT_FILE
+    f"Rows loaded: {len(df)}"
 )
 
 
 # ============================================================
-# 5. BASIC CLEANING
+# 3. BASIC FINAL SUMMARY
 # ============================================================
 
-required_columns = [
-    "Analysis",
-    "Participant",
-    "Behavioral_Variable",
-    "Wellbeing_Variable",
-    "r",
-    "p",
-    "p_FDR",
-    "N",
-    "Significant_FDR",
-]
+total_tests = len(df)
 
-missing_columns = [
-    column
-    for column in required_columns
-    if column not in df.columns
-]
+valid_tests = (
+    df["p"].notna()
+    &
+    df["N"].notna()
+    &
+    (df["N"] >= 10)
+).sum()
 
-if missing_columns:
+raw_significant = (
+    df["Significant_raw"] == True
+).sum()
 
-    raise ValueError(
-        "Missing required columns:\n"
-        + "\n".join(missing_columns)
-    )
+fdr_significant = (
+    df["Significant_FDR"] == True
+).sum()
 
 
-df["r"] = pd.to_numeric(
-    df["r"],
-    errors="coerce"
-)
-
-df["p"] = pd.to_numeric(
-    df["p"],
-    errors="coerce"
-)
-
-df["p_FDR"] = pd.to_numeric(
-    df["p_FDR"],
-    errors="coerce"
-)
-
-df["N"] = pd.to_numeric(
-    df["N"],
-    errors="coerce"
-)
+summary = pd.DataFrame([{
+    "Total_Tests": total_tests,
+    "Valid_Tests_N>=10": valid_tests,
+    "Raw_Significant_p<0.05": raw_significant,
+    "FDR_Significant_pFDR<0.05": fdr_significant
+}])
 
 
 # ============================================================
-# 6. FDR-SIGNIFICANT RESULTS
+# 4. TABLE 1 — FDR-SIGNIFICANT RELATIONSHIPS
 # ============================================================
 
-significant = df[
-    (df["Significant_FDR"] == True)
-    & df["p_FDR"].notna()
+fdr_df = df[
+    df["Significant_FDR"] == True
 ].copy()
 
-
-if significant.empty:
-
-    print()
-    print(
-        "No FDR-significant relationships were found."
-    )
-
-else:
-
-    # --------------------------------------------------------
-    # Absolute correlation
-    # --------------------------------------------------------
-
-    significant["Abs_r"] = (
-        significant["r"].abs()
-    )
-
-    # --------------------------------------------------------
-    # Direction
-    # --------------------------------------------------------
-
-    significant["Direction"] = np.where(
-        significant["r"] > 0,
-        "Positive",
-        np.where(
-            significant["r"] < 0,
-            "Negative",
-            "Zero"
-        )
-    )
-
-    # --------------------------------------------------------
-    # Sort by analysis and FDR p-value
-    # --------------------------------------------------------
-
-    significant = significant.sort_values(
-        [
-            "Analysis",
-            "p_FDR",
-            "Abs_r"
-        ],
-        ascending=[
-            True,
-            True,
-            False
-        ]
-    )
-
-
-# ============================================================
-# 7. TABLE 1 — ALL SIGNIFICANT RELATIONSHIPS
-# ============================================================
-
-table_relationships = significant[
-    [
+table_1_columns = [
+    col
+    for col in [
         "Analysis",
         "Participant",
-        "Behavioral_Variable",
-        "Wellbeing_Variable",
+        "Objective_Variable",
+        "Wellness_Variable",
         "r",
-        "Abs_r",
-        "Direction",
         "p",
-        "p_FDR",
-        "N"
+        "N",
+        "p_FDR"
     ]
+    if col in fdr_df.columns
+]
+
+table_1 = fdr_df[
+    table_1_columns
 ].copy()
 
-table_relationships_file = os.path.join(
+table_1 = table_1.sort_values(
+    by=[
+        "Analysis",
+        "Participant"
+    ]
+)
+
+
+# ============================================================
+# 5. TABLE 2 — SUMMARY BY ANALYSIS
+# ============================================================
+
+table_2 = (
+    df.groupby("Analysis")
+    .agg(
+        Total_Tests=("Analysis", "size"),
+        Valid_Tests_N10=(
+            "N",
+            lambda x: (x >= 10).sum()
+        ),
+        Raw_Significant=(
+            "Significant_raw",
+            "sum"
+        ),
+        FDR_Significant=(
+            "Significant_FDR",
+            "sum"
+        )
+    )
+    .reset_index()
+)
+
+
+# ============================================================
+# 6. TABLE 3 — SUMMARY BY WELLBEING VARIABLE
+# ============================================================
+
+table_3 = (
+    fdr_df.groupby("Wellness_Variable")
+    .agg(
+        FDR_Significant_Relationships=(
+            "Wellness_Variable",
+            "size"
+        ),
+        Participants=(
+            "Participant",
+            "nunique"
+        ),
+        Mean_Abs_r=(
+            "r",
+            lambda x: x.abs().mean()
+        )
+    )
+    .reset_index()
+)
+
+table_3 = table_3.sort_values(
+    by="FDR_Significant_Relationships",
+    ascending=False
+)
+
+
+# ============================================================
+# 7. TABLE 4 — SUMMARY BY BEHAVIORAL VARIABLE
+# ============================================================
+
+table_4 = (
+    fdr_df.groupby("Objective_Variable")
+    .agg(
+        FDR_Significant_Relationships=(
+            "Objective_Variable",
+            "size"
+        ),
+        Participants=(
+            "Participant",
+            "nunique"
+        ),
+        Analyses=(
+            "Analysis",
+            "nunique"
+        ),
+        Mean_Abs_r=(
+            "r",
+            lambda x: x.abs().mean()
+        )
+    )
+    .reset_index()
+)
+
+table_4 = table_4.sort_values(
+    by="FDR_Significant_Relationships",
+    ascending=False
+)
+
+
+# ============================================================
+# 8. SAVE OUTPUTS
+# ============================================================
+
+summary_file = os.path.join(
+    OUTPUT_DIR,
+    "final_summary.csv"
+)
+
+table_1_file = os.path.join(
     OUTPUT_DIR,
     "TABLE_1_FDR_significant_relationships.csv"
 )
 
-table_relationships.to_csv(
-    table_relationships_file,
-    index=False
-)
-
-
-# ============================================================
-# 8. TABLE 2 — SUMMARY BY ANALYSIS
-# ============================================================
-
-analysis_summary = []
-
-for analysis in sorted(
-    df["Analysis"].dropna().unique()
-):
-
-    analysis_df = df[
-        df["Analysis"] == analysis
-    ]
-
-    valid_df = analysis_df[
-        analysis_df["p_FDR"].notna()
-    ]
-
-    significant_df = analysis_df[
-        analysis_df["Significant_FDR"] == True
-    ]
-
-    analysis_summary.append({
-
-        "Analysis": analysis,
-
-        "Total_Tests": len(
-            analysis_df
-        ),
-
-        "Valid_Tests": len(
-            valid_df
-        ),
-
-        "Raw_Significant": int(
-            (
-                valid_df["p"] < ALPHA
-            ).sum()
-        ),
-
-        "FDR_Significant": len(
-            significant_df
-        ),
-
-        "Unique_Participants_with_FDR_Significant":
-            significant_df[
-                "Participant"
-            ].nunique(),
-
-        "Mean_Abs_r_FDR_Significant":
-            (
-                significant_df["r"].abs().mean()
-                if not significant_df.empty
-                else np.nan
-            ),
-
-        "Mean_r_FDR_Significant":
-            (
-                significant_df["r"].mean()
-                if not significant_df.empty
-                else np.nan
-            )
-    })
-
-
-analysis_summary_df = pd.DataFrame(
-    analysis_summary
-)
-
-analysis_summary_file = os.path.join(
+table_2_file = os.path.join(
     OUTPUT_DIR,
-    "TABLE_2_analysis_summary.csv"
+    "TABLE_2_summary_by_analysis.csv"
 )
 
-analysis_summary_df.to_csv(
-    analysis_summary_file,
-    index=False
-)
-
-
-# ============================================================
-# 9. TABLE 3 — SUMMARY BY BEHAVIORAL VARIABLE
-# ============================================================
-
-behavior_summary = (
-    significant
-    .groupby(
-        [
-            "Analysis",
-            "Behavioral_Variable"
-        ],
-        dropna=False
-    )
-    .agg(
-        FDR_Significant_Relationships=(
-            "Participant",
-            "count"
-        ),
-
-        Unique_Participants=(
-            "Participant",
-            "nunique"
-        ),
-
-        Mean_r=(
-            "r",
-            "mean"
-        ),
-
-        Mean_Abs_r=(
-            "Abs_r",
-            "mean"
-        )
-    )
-    .reset_index()
-)
-
-behavior_summary_file = os.path.join(
+table_3_file = os.path.join(
     OUTPUT_DIR,
-    "TABLE_3_behavior_summary.csv"
+    "TABLE_3_summary_by_wellbeing.csv"
 )
 
-behavior_summary.to_csv(
-    behavior_summary_file,
-    index=False
-)
-
-
-# ============================================================
-# 10. TABLE 4 — SUMMARY BY WELLBEING VARIABLE
-# ============================================================
-
-wellbeing_summary = (
-    significant
-    .groupby(
-        [
-            "Analysis",
-            "Wellbeing_Variable"
-        ],
-        dropna=False
-    )
-    .agg(
-        FDR_Significant_Relationships=(
-            "Participant",
-            "count"
-        ),
-
-        Unique_Participants=(
-            "Participant",
-            "nunique"
-        ),
-
-        Mean_r=(
-            "r",
-            "mean"
-        ),
-
-        Mean_Abs_r=(
-            "Abs_r",
-            "mean"
-        )
-    )
-    .reset_index()
-)
-
-wellbeing_summary_file = os.path.join(
+table_4_file = os.path.join(
     OUTPUT_DIR,
-    "TABLE_4_wellbeing_summary.csv"
+    "TABLE_4_summary_by_behavior.csv"
 )
 
-wellbeing_summary.to_csv(
-    wellbeing_summary_file,
+
+summary.to_csv(
+    summary_file,
+    index=False
+)
+
+table_1.to_csv(
+    table_1_file,
+    index=False
+)
+
+table_2.to_csv(
+    table_2_file,
+    index=False
+)
+
+table_3.to_csv(
+    table_3_file,
+    index=False
+)
+
+table_4.to_csv(
+    table_4_file,
     index=False
 )
 
 
 # ============================================================
-# 11. PRINT SUMMARY
+# 9. PRINT RESULTS
 # ============================================================
 
-print()
-print("=" * 70)
-print("FINAL SUMMARY COMPLETED")
-print("=" * 70)
-
-print()
-
-for _, row in analysis_summary_df.iterrows():
-
-    print(
-        f"{row['Analysis']}:"
-    )
-
-    print(
-        f"  Valid tests: "
-        f"{int(row['Valid_Tests'])}"
-    )
-
-    print(
-        f"  Raw significant: "
-        f"{int(row['Raw_Significant'])}"
-    )
-
-    print(
-        f"  FDR significant: "
-        f"{int(row['FDR_Significant'])}"
-    )
-
-    print()
-
+print("\nFINAL COUNTS")
+print("-" * 70)
 
 print(
-    f"Total FDR-significant relationships: "
-    f"{len(significant)}"
+    f"Total tests: {total_tests}"
 )
 
-print()
-print("Saved files:")
 print(
-    f"  {table_relationships_file}"
-)
-print(
-    f"  {analysis_summary_file}"
-)
-print(
-    f"  {behavior_summary_file}"
-)
-print(
-    f"  {wellbeing_summary_file}"
+    f"Valid tests (N >= 10): {valid_tests}"
 )
 
+print(
+    f"Raw significant: {raw_significant}"
+)
+
+print(
+    f"FDR significant: {fdr_significant}"
+)
+
+print("\nFiles saved:")
+print(summary_file)
+print(table_1_file)
+print(table_2_file)
+print(table_3_file)
+print(table_4_file)
+
+print("\n" + "=" * 70)
+print("FINAL SUMMARY COMPLETE")
 print("=" * 70)
