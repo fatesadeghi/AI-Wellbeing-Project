@@ -1,5 +1,0 @@
-Analysis,Total_Tests,Valid_Tests,Raw_Significant,FDR_Significant,Unique_Participants_with_FDR_Significant,Mean_Abs_r_FDR_Significant,Mean_r_FDR_Significant
-lagged,1040,862,63,4,1,0.5113870171181985,-0.5113870171181985
-same_day,1040,900,180,43,10,0.5050857444035866,0.4740624086684995
-sensitivity_Z1,955,603,108,21,7,0.7657625946859629,0.5311756471600859
-seven_day,1035,794,103,6,3,0.5361978534524204,0.23213490264120928

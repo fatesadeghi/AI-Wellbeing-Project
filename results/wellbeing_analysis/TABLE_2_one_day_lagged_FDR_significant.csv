@@ -1,5 +1,0 @@
-Participant,Previous-day Behavior,Next-day Well-being,Pearson r,p-value,N,FDR q-value
-p01,Exercise_Calories,readiness,-0.549,3e-06,64,0.001146
-p01,Exercise_Distance,readiness,-0.491,3.8e-05,64,0.011039
-p01,Exercise_Duration,readiness,-0.454,0.000164,64,0.035658
-p01,Steps,readiness,-0.551,2e-06,64,0.001146
