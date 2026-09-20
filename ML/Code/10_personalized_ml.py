@@ -101,9 +101,10 @@ MAX_SPLITS = 3
 # ============================================================
 
 # Seven representations are created for each behavioral
-# variable. With 13 behavioral variables this gives:
+# variable.
 #
-# 13 × 7 = 91 candidate ML feature columns.
+# 13 behavioral variables × 7 representations = 91
+# candidate ML feature columns.
 
 FEATURE_REPRESENTATIONS = [
     "raw",
@@ -119,127 +120,6 @@ FEATURE_REPRESENTATIONS = [
 # ============================================================
 # 4. HELPER FUNCTIONS
 # ============================================================
-
-def safe_zscore(series):
-    """
-    Calculate a standard z-score.
-    Returns zeros when the standard deviation is zero.
-    """
-
-    mean = series.mean()
-    std = series.std()
-
-    if pd.isna(std) or std == 0:
-        return pd.Series(
-            0.0,
-            index=series.index
-        )
-
-    return (
-        series - mean
-    ) / std
-
-
-def create_behavior_features(df):
-    """
-    Create the seven candidate representations for each
-    behavioral variable.
-    """
-
-    features = pd.DataFrame(
-        index=df.index
-    )
-
-    for variable in BEHAVIOR_VARS:
-
-        if variable not in df.columns:
-            continue
-
-        series = pd.to_numeric(
-            df[variable],
-            errors="coerce"
-        )
-
-        # ----------------------------------------------------
-        # 1. Raw value
-        # ----------------------------------------------------
-
-        features[
-            f"{variable}__raw"
-        ] = series
-
-        # ----------------------------------------------------
-        # 2. Day-to-day change
-        # ----------------------------------------------------
-
-        features[
-            f"{variable}__change"
-        ] = series.diff()
-
-        # ----------------------------------------------------
-        # 3. Previous 3-day rolling mean
-        # ----------------------------------------------------
-
-        features[
-            f"{variable}__rolling_3"
-        ] = (
-            series
-            .shift(1)
-            .rolling(
-                window=3,
-                min_periods=3
-            )
-            .mean()
-        )
-
-        # ----------------------------------------------------
-        # 4. Previous 7-day rolling mean
-        # ----------------------------------------------------
-
-        features[
-            f"{variable}__rolling_7"
-        ] = (
-            series
-            .shift(1)
-            .rolling(
-                window=7,
-                min_periods=7
-            )
-            .mean()
-        )
-
-        # ----------------------------------------------------
-        # 5. Z-score
-        # ----------------------------------------------------
-
-        z = safe_zscore(
-            series
-        )
-
-        features[
-            f"{variable}__zscore"
-        ] = z
-
-        # ----------------------------------------------------
-        # 6. Absolute z-score
-        # ----------------------------------------------------
-
-        features[
-            f"{variable}__abs_zscore"
-        ] = z.abs()
-
-        # ----------------------------------------------------
-        # 7. Deviation from participant median
-        # ----------------------------------------------------
-
-        median = series.median()
-
-        features[
-            f"{variable}__deviation"
-        ] = series - median
-
-    return features
-
 
 def make_model():
     """
@@ -292,14 +172,299 @@ def get_time_splits(n_rows):
     )
 
 
+def create_behavior_features(
+    df,
+    feature_reference_end
+):
+    """
+    Create seven candidate representations for each
+    behavioral variable without using future information.
+
+    The reference statistics for z-score and deviation are
+    calculated only from observations available up to
+    feature_reference_end.
+
+    Rolling features use only previous observations.
+    """
+
+    features = pd.DataFrame(
+        index=df.index
+    )
+
+    reference_df = df.loc[
+        df.index <= feature_reference_end
+    ].copy()
+
+    for variable in BEHAVIOR_VARS:
+
+        if variable not in df.columns:
+            continue
+
+        series = pd.to_numeric(
+            df[variable],
+            errors="coerce"
+        )
+
+        reference_series = pd.to_numeric(
+            reference_df[variable],
+            errors="coerce"
+        )
+
+        # ----------------------------------------------------
+        # 1. Raw value
+        # ----------------------------------------------------
+
+        features[
+            f"{variable}__raw"
+        ] = series
+
+        # ----------------------------------------------------
+        # 2. Day-to-day change
+        # ----------------------------------------------------
+
+        features[
+            f"{variable}__change"
+        ] = series.diff()
+
+        # ----------------------------------------------------
+        # 3. Previous 3-day rolling mean
+        # ----------------------------------------------------
+
+        features[
+            f"{variable}__rolling_3"
+        ] = (
+            series
+            .shift(1)
+            .rolling(
+                window=3,
+                min_periods=3
+            )
+            .mean()
+        )
+
+        # ----------------------------------------------------
+        # 4. Previous 7-day rolling mean
+        # ----------------------------------------------------
+
+        features[
+            f"{variable}__rolling_7"
+        ] = (
+            series
+            .shift(1)
+            .rolling(
+                window=7,
+                min_periods=7
+            )
+            .mean()
+        )
+
+        # ----------------------------------------------------
+        # 5. Historical z-score
+        # ----------------------------------------------------
+
+        reference_mean = (
+            reference_series.mean()
+        )
+
+        reference_std = (
+            reference_series.std()
+        )
+
+        if (
+            pd.isna(reference_std)
+            or reference_std == 0
+        ):
+
+            z = pd.Series(
+                0.0,
+                index=series.index
+            )
+
+        else:
+
+            z = (
+                series - reference_mean
+            ) / reference_std
+
+        features[
+            f"{variable}__zscore"
+        ] = z
+
+        # ----------------------------------------------------
+        # 6. Absolute historical z-score
+        # ----------------------------------------------------
+
+        features[
+            f"{variable}__abs_zscore"
+        ] = z.abs()
+
+        # ----------------------------------------------------
+        # 7. Historical median deviation
+        # ----------------------------------------------------
+
+        reference_median = (
+            reference_series.median()
+        )
+
+        features[
+            f"{variable}__deviation"
+        ] = (
+            series - reference_median
+        )
+
+    return features
+
+
+def create_features_for_training_period(
+    participant_df,
+    end_index
+):
+    """
+    Create features for a participant using only information
+    available within the specified training period.
+
+    This prevents future observations from being used when
+    constructing historical normalization statistics.
+    """
+
+    feature_df = pd.DataFrame(
+        index=participant_df.index
+    )
+
+    reference_df = participant_df.loc[
+        participant_df.index <= end_index
+    ].copy()
+
+    for variable in BEHAVIOR_VARS:
+
+        if variable not in participant_df.columns:
+            continue
+
+        series = pd.to_numeric(
+            participant_df[variable],
+            errors="coerce"
+        )
+
+        reference_series = pd.to_numeric(
+            reference_df[variable],
+            errors="coerce"
+        )
+
+        # ----------------------------------------------------
+        # Raw
+        # ----------------------------------------------------
+
+        feature_df[
+            f"{variable}__raw"
+        ] = series
+
+        # ----------------------------------------------------
+        # Change
+        # ----------------------------------------------------
+
+        feature_df[
+            f"{variable}__change"
+        ] = series.diff()
+
+        # ----------------------------------------------------
+        # Previous 3-day mean
+        # ----------------------------------------------------
+
+        feature_df[
+            f"{variable}__rolling_3"
+        ] = (
+            series
+            .shift(1)
+            .rolling(
+                window=3,
+                min_periods=3
+            )
+            .mean()
+        )
+
+        # ----------------------------------------------------
+        # Previous 7-day mean
+        # ----------------------------------------------------
+
+        feature_df[
+            f"{variable}__rolling_7"
+        ] = (
+            series
+            .shift(1)
+            .rolling(
+                window=7,
+                min_periods=7
+            )
+            .mean()
+        )
+
+        # ----------------------------------------------------
+        # Historical z-score
+        # ----------------------------------------------------
+
+        mean_value = (
+            reference_series.mean()
+        )
+
+        std_value = (
+            reference_series.std()
+        )
+
+        if (
+            pd.isna(std_value)
+            or std_value == 0
+        ):
+
+            z = pd.Series(
+                0.0,
+                index=series.index
+            )
+
+        else:
+
+            z = (
+                series - mean_value
+            ) / std_value
+
+        feature_df[
+            f"{variable}__zscore"
+        ] = z
+
+        # ----------------------------------------------------
+        # Absolute z-score
+        # ----------------------------------------------------
+
+        feature_df[
+            f"{variable}__abs_zscore"
+        ] = z.abs()
+
+        # ----------------------------------------------------
+        # Historical median deviation
+        # ----------------------------------------------------
+
+        median_value = (
+            reference_series.median()
+        )
+
+        feature_df[
+            f"{variable}__deviation"
+        ] = (
+            series - median_value
+        )
+
+    return feature_df
+
+
 # ============================================================
 # 5. LOAD DATA
 # ============================================================
 
 if not os.path.exists(INPUT_FILE):
+
     raise FileNotFoundError(
         f"Prepared ML data not found:\n{INPUT_FILE}"
     )
+
 
 df = pd.read_csv(
     INPUT_FILE
@@ -311,12 +476,18 @@ df["Date"] = pd.to_datetime(
 )
 
 df = (
-    df.dropna(subset=["Date"])
+    df
+    .dropna(
+        subset=["Date"]
+    )
     .sort_values(
         ["Participant", "Date"]
     )
-    .reset_index(drop=True)
+    .reset_index(
+        drop=True
+    )
 )
+
 
 print("=" * 70)
 print("PERSONALIZED MACHINE LEARNING")
@@ -333,98 +504,14 @@ print(
 
 
 # ============================================================
-# 6. CREATE CANDIDATE FEATURES
-# ============================================================
-
-all_feature_blocks = []
-
-for participant, participant_df in df.groupby(
-    "Participant",
-    sort=False
-):
-
-    participant_df = (
-        participant_df
-        .sort_values("Date")
-        .copy()
-    )
-
-    feature_block = create_behavior_features(
-        participant_df
-    )
-
-    feature_block.insert(
-        0,
-        "Participant",
-        participant
-    )
-
-    feature_block.insert(
-        1,
-        "Date",
-        participant_df["Date"].values
-    )
-
-    all_feature_blocks.append(
-        feature_block
-    )
-
-
-feature_df = pd.concat(
-    all_feature_blocks,
-    ignore_index=True
-)
-
-
-FEATURE_COLUMNS = [
-    column
-    for column in feature_df.columns
-    if column not in [
-        "Participant",
-        "Date"
-    ]
-]
-
-print(
-    f"Candidate ML feature columns: "
-    f"{len(FEATURE_COLUMNS)}"
-)
-
-
-# ============================================================
-# 7. COMBINE FEATURES WITH TARGETS
-# ============================================================
-
-target_columns = [
-    f"{TARGET_PREFIX}{variable}"
-    for variable in WELLBEING_VARS
-    if f"{TARGET_PREFIX}{variable}" in df.columns
-]
-
-target_df = df[
-    [
-        "Participant",
-        "Date"
-    ] + target_columns
-].copy()
-
-model_df = feature_df.merge(
-    target_df,
-    on=[
-        "Participant",
-        "Date"
-    ],
-    how="left"
-)
-
-
-# ============================================================
-# 8. LOAD FEATURE AVAILABILITY INFORMATION
+# 6. LOAD FEATURE AVAILABILITY INFORMATION
 # ============================================================
 
 excluded_features = set()
 
-if os.path.exists(FEATURE_STATUS_FILE):
+if os.path.exists(
+    FEATURE_STATUS_FILE
+):
 
     feature_status = pd.read_csv(
         FEATURE_STATUS_FILE
@@ -447,7 +534,7 @@ if os.path.exists(FEATURE_STATUS_FILE):
 
 
 # ============================================================
-# 9. MODEL TRAINING
+# 7. MODEL TRAINING
 # ============================================================
 
 performance_rows = []
@@ -456,17 +543,16 @@ importance_rows = []
 
 final_feature_status_rows = []
 
-
 participants = sorted(
-    model_df["Participant"].unique()
+    df["Participant"].unique()
 )
 
 
 for participant in participants:
 
     participant_df = (
-        model_df[
-            model_df["Participant"]
+        df[
+            df["Participant"]
             ==
             participant
         ]
@@ -474,8 +560,13 @@ for participant in participants:
         .reset_index(drop=True)
     )
 
-    print("\n" + "-" * 70)
-    print(f"Participant: {participant}")
+    print(
+        "\n" + "-" * 70
+    )
+
+    print(
+        f"Participant: {participant}"
+    )
 
     # --------------------------------------------------------
     # Participant-specific active behavior variables
@@ -517,16 +608,15 @@ for participant in participants:
     # Participant-specific feature columns
     # --------------------------------------------------------
 
-    participant_feature_columns = [
-        column
-        for column in FEATURE_COLUMNS
-        if any(
-            column.startswith(
-                f"{variable}__"
+    participant_feature_columns = []
+
+    for variable in active_behaviors:
+
+        for representation in FEATURE_REPRESENTATIONS:
+
+            participant_feature_columns.append(
+                f"{variable}__{representation}"
             )
-            for variable in active_behaviors
-        )
-    ]
 
     # --------------------------------------------------------
     # Train one model per wellbeing target
@@ -539,6 +629,11 @@ for participant in participants:
         )
 
         if target not in participant_df.columns:
+
+            print(
+                f"  {wellbeing}: target column not found"
+            )
+
             continue
 
         target_values = pd.to_numeric(
@@ -550,38 +645,99 @@ for participant in participants:
             target_values.notna()
         )
 
-        if valid_target_mask.sum() < 10:
+        n_valid = int(
+            valid_target_mask.sum()
+        )
+
+        if n_valid < 10:
 
             print(
                 f"  {wellbeing}: "
                 f"insufficient target observations "
-                f"({valid_target_mask.sum()})"
+                f"({n_valid})"
             )
 
             continue
 
-        X = participant_df[
-            participant_feature_columns
+        # ----------------------------------------------------
+        # Determine training/test rows chronologically
+        # ----------------------------------------------------
+
+        valid_indices = np.where(
+            valid_target_mask.values
+        )[0]
+
+        X_full = participant_df[
+            [
+                variable
+                for variable in participant_df.columns
+                if variable in BEHAVIOR_VARS
+            ]
         ].copy()
 
-        y = target_values.copy()
+        y_full = target_values.copy()
 
         # ----------------------------------------------------
-        # Keep chronological order
+        # Create target-valid dataset
         # ----------------------------------------------------
 
-        X = X.loc[
+        valid_df = participant_df.loc[
             valid_target_mask
-        ].reset_index(drop=True)
+        ].copy()
 
-        y = y.loc[
-            valid_target_mask
-        ].reset_index(drop=True)
+        valid_df = (
+            valid_df
+            .reset_index(drop=True)
+        )
 
-        dates = participant_df.loc[
-            valid_target_mask,
+        y = pd.to_numeric(
+            valid_df[target],
+            errors="coerce"
+        ).reset_index(
+            drop=True
+        )
+
+        # ----------------------------------------------------
+        # Build features using the complete chronological
+        # participant series.
+        #
+        # Raw/change/rolling features do not use future rows.
+        # Historical normalization is based on the training
+        # boundary used below.
+        # ----------------------------------------------------
+
+        all_features = (
+            create_features_for_training_period(
+                participant_df,
+                end_index=len(participant_df) - 1
+            )
+        )
+
+        all_features = (
+            all_features
+            .reset_index(drop=True)
+        )
+
+        X = all_features.loc[
+            valid_target_mask.values
+        ].reset_index(
+            drop=True
+        )
+
+        # Keep only active participant features
+        X = X[
+            [
+                column
+                for column in participant_feature_columns
+                if column in X.columns
+            ]
+        ]
+
+        dates = valid_df[
             "Date"
-        ].reset_index(drop=True)
+        ].reset_index(
+            drop=True
+        )
 
         # ----------------------------------------------------
         # Time-series cross-validation
@@ -604,35 +760,196 @@ for participant in participants:
 
         fold_actuals = []
 
-        fold_indices = []
+        fold_test_dates = []
 
         for train_index, test_index in tscv.split(X):
 
             X_train = X.iloc[
                 train_index
-            ]
+            ].copy()
 
             X_test = X.iloc[
                 test_index
-            ]
+            ].copy()
 
             y_train = y.iloc[
                 train_index
-            ]
+            ].copy()
 
             y_test = y.iloc[
                 test_index
-            ]
+            ].copy()
+
+            # ------------------------------------------------
+            # Recalculate normalization statistics using ONLY
+            # the training observations for this fold.
+            #
+            # This is especially important for z-score and
+            # deviation features.
+            # ------------------------------------------------
+
+            training_reference = (
+                participant_df.loc[
+                    valid_indices[train_index]
+                ].copy()
+            )
+
+            fold_features = pd.DataFrame(
+                index=participant_df.index
+            )
+
+            for variable in active_behaviors:
+
+                if variable not in participant_df.columns:
+                    continue
+
+                series = pd.to_numeric(
+                    participant_df[variable],
+                    errors="coerce"
+                )
+
+                reference_series = pd.to_numeric(
+                    training_reference[variable],
+                    errors="coerce"
+                )
+
+                # --------------------------------------------
+                # Raw
+                # --------------------------------------------
+
+                fold_features[
+                    f"{variable}__raw"
+                ] = series
+
+                # --------------------------------------------
+                # Change
+                # --------------------------------------------
+
+                fold_features[
+                    f"{variable}__change"
+                ] = series.diff()
+
+                # --------------------------------------------
+                # Previous 3-day rolling mean
+                # --------------------------------------------
+
+                fold_features[
+                    f"{variable}__rolling_3"
+                ] = (
+                    series
+                    .shift(1)
+                    .rolling(
+                        window=3,
+                        min_periods=3
+                    )
+                    .mean()
+                )
+
+                # --------------------------------------------
+                # Previous 7-day rolling mean
+                # --------------------------------------------
+
+                fold_features[
+                    f"{variable}__rolling_7"
+                ] = (
+                    series
+                    .shift(1)
+                    .rolling(
+                        window=7,
+                        min_periods=7
+                    )
+                    .mean()
+                )
+
+                # --------------------------------------------
+                # Training-only z-score
+                # --------------------------------------------
+
+                reference_mean = (
+                    reference_series.mean()
+                )
+
+                reference_std = (
+                    reference_series.std()
+                )
+
+                if (
+                    pd.isna(reference_std)
+                    or reference_std == 0
+                ):
+
+                    z = pd.Series(
+                        0.0,
+                        index=series.index
+                    )
+
+                else:
+
+                    z = (
+                        series - reference_mean
+                    ) / reference_std
+
+                fold_features[
+                    f"{variable}__zscore"
+                ] = z
+
+                # --------------------------------------------
+                # Absolute z-score
+                # --------------------------------------------
+
+                fold_features[
+                    f"{variable}__abs_zscore"
+                ] = z.abs()
+
+                # --------------------------------------------
+                # Training-only median deviation
+                # --------------------------------------------
+
+                reference_median = (
+                    reference_series.median()
+                )
+
+                fold_features[
+                    f"{variable}__deviation"
+                ] = (
+                    series - reference_median
+                )
+
+            fold_features = (
+                fold_features
+                .loc[
+                    :,
+                    participant_feature_columns
+                ]
+            )
+
+            X_train_fold = (
+                fold_features.iloc[
+                    train_index
+                ]
+                .copy()
+            )
+
+            X_test_fold = (
+                fold_features.iloc[
+                    test_index
+                ]
+                .copy()
+            )
+
+            # ------------------------------------------------
+            # Train model
+            # ------------------------------------------------
 
             model = make_model()
 
             model.fit(
-                X_train,
+                X_train_fold,
                 y_train
             )
 
             predictions = model.predict(
-                X_test
+                X_test_fold
             )
 
             fold_predictions.extend(
@@ -643,8 +960,10 @@ for participant in participants:
                 y_test.values
             )
 
-            fold_indices.extend(
-                test_index
+            fold_test_dates.extend(
+                dates.iloc[
+                    test_index
+                ].values
             )
 
         # ----------------------------------------------------
@@ -652,7 +971,6 @@ for participant in participants:
         # ----------------------------------------------------
 
         if len(fold_actuals) == 0:
-
             continue
 
         actual = np.asarray(
@@ -678,11 +996,14 @@ for participant in participants:
         )
 
         try:
+
             r2 = r2_score(
                 actual,
                 predicted
             )
+
         except Exception:
+
             r2 = np.nan
 
         performance_rows.append({
@@ -708,18 +1029,48 @@ for participant in participants:
 
         # ----------------------------------------------------
         # Fit final model on all available observations
+        #
+        # Feature construction for the final model uses the
+        # participant's available historical data.
         # ----------------------------------------------------
+
+        final_features = (
+            create_features_for_training_period(
+                participant_df,
+                end_index=len(participant_df) - 1
+            )
+        )
+
+        final_features = (
+            final_features
+            .loc[
+                :,
+                participant_feature_columns
+            ]
+        )
+
+        final_X = final_features.loc[
+            valid_target_mask.values
+        ].reset_index(
+            drop=True
+        )
+
+        final_y = y.reset_index(
+            drop=True
+        )
 
         final_model = make_model()
 
         final_model.fit(
-            X,
-            y
+            final_X,
+            final_y
         )
 
-        rf_model = final_model.named_steps[
-            "model"
-        ]
+        rf_model = (
+            final_model.named_steps[
+                "model"
+            ]
+        )
 
         importances = (
             rf_model.feature_importances_
@@ -743,7 +1094,7 @@ for participant in participants:
 
 
 # ============================================================
-# 10. SAVE PERFORMANCE
+# 8. SAVE RESULTS
 # ============================================================
 
 performance_df = pd.DataFrame(
@@ -792,20 +1143,28 @@ feature_status_df.to_csv(
 
 
 # ============================================================
-# 11. FINAL SUMMARY
+# 9. FINAL SUMMARY
 # ============================================================
 
-print("\n" + "=" * 70)
-print("PERSONALIZED ML COMPLETE")
-print("=" * 70)
+print(
+    "\n" + "=" * 70
+)
+
+print(
+    "PERSONALIZED ML COMPLETE"
+)
+
+print(
+    "=" * 70
+)
 
 print(
     f"Participants: {len(participants)}"
 )
 
 print(
-    f"Candidate feature columns: "
-    f"{len(FEATURE_COLUMNS)}"
+    "Candidate feature columns: "
+    f"{len(BEHAVIOR_VARS) * len(FEATURE_REPRESENTATIONS)}"
 )
 
 print(
@@ -833,15 +1192,18 @@ if not performance_df.empty:
     ).sum()
 
     print(
-        f"Positive R2 models: {positive_r2}"
+        f"Positive R2 models: "
+        f"{positive_r2}"
     )
 
     print(
-        f"Zero R2 models: {zero_r2}"
+        f"Zero R2 models: "
+        f"{zero_r2}"
     )
 
     print(
-        f"Negative R2 models: {negative_r2}"
+        f"Negative R2 models: "
+        f"{negative_r2}"
     )
 
     print(
@@ -864,15 +1226,23 @@ if not performance_df.empty:
         f"{performance_df['RMSE'].mean():.4f}"
     )
 
-print("\nOutput files:")
+
+print(
+    "\nOutput files:"
+)
+
 print(
     f"  {PERFORMANCE_FILE}"
 )
+
 print(
     f"  {IMPORTANCE_FILE}"
 )
+
 print(
     f"  {FINAL_STATUS_FILE}"
 )
 
-print("\n" + "=" * 70)
+print(
+    "\n" + "=" * 70
+)
