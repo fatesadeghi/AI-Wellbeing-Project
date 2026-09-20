@@ -4,14 +4,17 @@ import numpy as np
 
 
 # ============================================================
-# 1. PROJECT PATHS
+# 1. PATHS
 # ============================================================
+
+# Current file:
+# AI-Wellbeing-Project/Code/06_fdr_correction.py
+#
+# Therefore BASE_DIR = AI-Wellbeing-Project
 
 BASE_DIR = os.path.dirname(
     os.path.dirname(
-        os.path.dirname(
-            os.path.abspath(__file__)
-        )
+        os.path.abspath(__file__)
     )
 )
 
@@ -25,21 +28,17 @@ OUTPUT_DIR = os.path.join(
     "fdr"
 )
 
-
-# ============================================================
-# 2. SETTINGS
-# ============================================================
-
-MIN_N = 10
-ALPHA = 0.05
+os.makedirs(
+    OUTPUT_DIR,
+    exist_ok=True
+)
 
 
 # ============================================================
-# 3. INPUT FILES
+# 2. INPUT FILES
 # ============================================================
 
-INPUT_FILES = {
-
+ANALYSIS_FILES = {
     "same_day": os.path.join(
         RESULTS_DIR,
         "same_day",
@@ -55,397 +54,314 @@ INPUT_FILES = {
     "seven_day": os.path.join(
         RESULTS_DIR,
         "seven_day",
-        "seven_day_history_wellbeing_relationships.csv"
+        "seven_day_behavior_wellbeing_relationships.csv"
     ),
 
     "sensitivity_Z1": os.path.join(
         RESULTS_DIR,
         "sensitivity",
         "sensitivity_Z1_same_day_relationships.csv"
-    ),
+    )
 }
 
 
 # ============================================================
-# 4. BENJAMINI-HOCHBERG FDR
+# 3. FDR FUNCTION
 # ============================================================
 
-def benjamini_hochberg(
-    p_values,
-    alpha=0.05
-):
+def benjamini_hochberg(p_values):
     """
     Benjamini-Hochberg FDR correction.
-
-    Returns:
-        adjusted p-values
+    Returns adjusted p-values in the original order.
     """
 
-    p_values = np.asarray(
-        p_values,
-        dtype=float
-    )
+    p_values = np.asarray(p_values, dtype=float)
 
-    adjusted = np.full(
-        len(p_values),
-        np.nan
-    )
+    n = len(p_values)
 
-    valid_mask = np.isfinite(
-        p_values
-    )
+    if n == 0:
+        return np.array([])
 
-    if not valid_mask.any():
-        return adjusted
+    order = np.argsort(p_values)
 
-    valid_p = p_values[
-        valid_mask
-    ]
+    ranked_p = p_values[order]
 
-    m = len(valid_p)
+    adjusted = np.empty(n)
 
-    order = np.argsort(
-        valid_p
-    )
+    cumulative_min = 1.0
 
-    sorted_p = valid_p[
-        order
-    ]
+    for i in range(n - 1, -1, -1):
 
-    ranks = np.arange(
-        1,
-        m + 1
-    )
+        rank = i + 1
 
-    adjusted_sorted = (
-        sorted_p * m / ranks
-    )
+        value = ranked_p[i] * n / rank
 
-    # Ensure monotonicity.
-    adjusted_sorted = np.minimum.accumulate(
-        adjusted_sorted[::-1]
-    )[::-1]
+        cumulative_min = min(
+            cumulative_min,
+            value
+        )
 
-    # Adjusted p-values cannot exceed 1.
-    adjusted_sorted = np.minimum(
-        adjusted_sorted,
-        1.0
-    )
+        adjusted[i] = cumulative_min
 
-    # Restore original order.
-    valid_adjusted = np.empty(
-        m
-    )
+    result = np.empty(n)
 
-    valid_adjusted[
-        order
-    ] = adjusted_sorted
+    result[order] = adjusted
 
-    adjusted[
-        valid_mask
-    ] = valid_adjusted
-
-    return adjusted
+    return result
 
 
 # ============================================================
-# 5. PROCESS ONE ANALYSIS
-# ============================================================
-
-def process_analysis(
-    analysis_name,
-    input_file
-):
-
-    print()
-    print("-" * 60)
-
-    print(
-        f"Processing: {analysis_name}"
-    )
-
-    print("-" * 60)
-
-    if not os.path.exists(
-        input_file
-    ):
-
-        print(
-            f"Input file not found:\n"
-            f"{input_file}"
-        )
-
-        return None
-
-    df = pd.read_csv(
-        input_file
-    )
-
-    # --------------------------------------------------------
-    # REQUIRED COLUMNS
-    # --------------------------------------------------------
-
-    required_columns = [
-        "p",
-        "N",
-        "Included",
-    ]
-
-    missing_columns = [
-        column
-        for column in required_columns
-        if column not in df.columns
-    ]
-
-    if missing_columns:
-
-        raise ValueError(
-            f"Missing required columns in "
-            f"{input_file}: "
-            + ", ".join(missing_columns)
-        )
-
-    # --------------------------------------------------------
-    # VALID TESTS
-    # --------------------------------------------------------
-
-    valid = (
-        (df["Included"] == "Yes")
-        & (df["N"] >= MIN_N)
-        & df["p"].notna()
-        & np.isfinite(df["p"])
-    )
-
-    # --------------------------------------------------------
-    # INITIALIZE FDR COLUMN
-    # --------------------------------------------------------
-
-    df["p_FDR"] = np.nan
-
-    # --------------------------------------------------------
-    # FDR FAMILY
-    # --------------------------------------------------------
-    #
-    # FDR is applied separately within each analysis.
-    #
-    # same_day       -> one FDR family
-    # lagged         -> one FDR family
-    # seven_day      -> one FDR family
-    # sensitivity_Z1 -> one FDR family
-    #
-    # --------------------------------------------------------
-
-    p_values = df.loc[
-        valid,
-        "p"
-    ].astype(float).to_numpy()
-
-    if len(p_values) > 0:
-
-        corrected = benjamini_hochberg(
-            p_values,
-            alpha=ALPHA
-        )
-
-        df.loc[
-            valid,
-            "p_FDR"
-        ] = corrected
-
-    # --------------------------------------------------------
-    # RAW SIGNIFICANCE
-    # --------------------------------------------------------
-
-    df["Significant_raw"] = (
-        valid
-        & (df["p"] < ALPHA)
-    )
-
-    # --------------------------------------------------------
-    # FDR SIGNIFICANCE
-    # --------------------------------------------------------
-
-    df["Significant_FDR"] = (
-        valid
-        & (df["p_FDR"] < ALPHA)
-    )
-
-    # --------------------------------------------------------
-    # ANALYSIS LABEL
-    # --------------------------------------------------------
-
-    df.insert(
-        0,
-        "Analysis",
-        analysis_name
-    )
-
-    return df
-
-
-# ============================================================
-# 6. RUN ALL ANALYSES
+# 4. PROCESS EACH ANALYSIS FAMILY
 # ============================================================
 
 all_results = []
 
-for analysis_name, input_file in INPUT_FILES.items():
+summary_rows = []
 
-    result = process_analysis(
-        analysis_name,
-        input_file
-    )
 
-    if result is not None:
+for analysis_name, file_path in ANALYSIS_FILES.items():
 
-        all_results.append(
-            result
+    print("\n" + "=" * 70)
+    print(f"Processing: {analysis_name}")
+    print("=" * 70)
+
+    if not os.path.exists(file_path):
+
+        print(
+            f"WARNING: File not found:\n{file_path}"
         )
 
+        continue
 
-if not all_results:
+    df = pd.read_csv(file_path)
 
-    raise RuntimeError(
-        "No analysis result files were found."
+    print(
+        f"Rows loaded: {len(df)}"
     )
 
+    # --------------------------------------------------------
+    # Ensure required columns exist
+    # --------------------------------------------------------
 
-# ============================================================
-# 7. COMBINE RESULTS
-# ============================================================
+    required_columns = [
+        "r",
+        "p",
+        "N"
+    ]
 
-combined = pd.concat(
-    all_results,
-    ignore_index=True
-)
+    missing_columns = [
+        col
+        for col in required_columns
+        if col not in df.columns
+    ]
 
+    if missing_columns:
 
-# ============================================================
-# 8. CREATE OUTPUT DIRECTORY
-# ============================================================
+        print(
+            f"WARNING: Missing columns: {missing_columns}"
+        )
 
-os.makedirs(
-    OUTPUT_DIR,
-    exist_ok=True
-)
+        continue
 
+    # --------------------------------------------------------
+    # Valid statistical tests
+    # --------------------------------------------------------
 
-# ============================================================
-# 9. SAVE COMBINED RESULTS
-# ============================================================
+    valid_mask = (
+        df["p"].notna()
+        &
+        np.isfinite(
+            pd.to_numeric(
+                df["p"],
+                errors="coerce"
+            )
+        )
+        &
+        (df["N"] >= 10)
+    )
 
-combined_file = os.path.join(
-    OUTPUT_DIR,
-    "all_final_fdr_results.csv"
-)
-
-combined.to_csv(
-    combined_file,
-    index=False
-)
-
-
-# ============================================================
-# 10. SAVE FDR-SIGNIFICANT RESULTS
-# ============================================================
-
-significant = combined[
-    combined["Significant_FDR"] == True
-].copy()
-
-significant_file = os.path.join(
-    OUTPUT_DIR,
-    "all_fdr_significant_results.csv"
-)
-
-significant.to_csv(
-    significant_file,
-    index=False
-)
-
-
-# ============================================================
-# 11. SAVE EACH ANALYSIS SEPARATELY
-# ============================================================
-
-analysis_names = (
-    combined["Analysis"]
-    .dropna()
-    .unique()
-)
-
-for analysis_name in analysis_names:
-
-    analysis_df = combined[
-        combined["Analysis"] == analysis_name
+    valid_df = df.loc[
+        valid_mask
     ].copy()
+
+    print(
+        f"Valid tests (N >= 10): {len(valid_df)}"
+    )
+
+    if len(valid_df) == 0:
+
+        df["p_FDR"] = np.nan
+        df["Significant_raw"] = False
+        df["Significant_FDR"] = False
+
+        df["Analysis"] = analysis_name
+
+        all_results.append(df)
+
+        continue
+
+    # --------------------------------------------------------
+    # Raw significance
+    # --------------------------------------------------------
+
+    valid_df["Significant_raw"] = (
+        valid_df["p"] < 0.05
+    )
+
+    raw_significant = int(
+        valid_df["Significant_raw"].sum()
+    )
+
+    # --------------------------------------------------------
+    # Benjamini-Hochberg FDR
+    # Applied separately within each analysis family
+    # --------------------------------------------------------
+
+    valid_df["p_FDR"] = benjamini_hochberg(
+        valid_df["p"].values
+    )
+
+    valid_df["Significant_FDR"] = (
+        valid_df["p_FDR"] < 0.05
+    )
+
+    fdr_significant = int(
+        valid_df["Significant_FDR"].sum()
+    )
+
+    # --------------------------------------------------------
+    # Put corrected values back into original dataframe
+    # --------------------------------------------------------
+
+    df["p_FDR"] = np.nan
+    df["Significant_raw"] = False
+    df["Significant_FDR"] = False
+
+    df.loc[
+        valid_df.index,
+        "p_FDR"
+    ] = valid_df["p_FDR"]
+
+    df.loc[
+        valid_df.index,
+        "Significant_raw"
+    ] = valid_df["Significant_raw"]
+
+    df.loc[
+        valid_df.index,
+        "Significant_FDR"
+    ] = valid_df["Significant_FDR"]
+
+    df["Analysis"] = analysis_name
+
+    # --------------------------------------------------------
+    # Save corrected results for this analysis
+    # --------------------------------------------------------
 
     output_file = os.path.join(
         OUTPUT_DIR,
         f"{analysis_name}_fdr_results.csv"
     )
 
-    analysis_df.to_csv(
+    df.to_csv(
         output_file,
         index=False
     )
 
+    print(
+        f"Raw significant: {raw_significant}"
+    )
+
+    print(
+        f"FDR significant: {fdr_significant}"
+    )
+
+    print(
+        f"Saved: {output_file}"
+    )
+
+    # --------------------------------------------------------
+    # Summary
+    # --------------------------------------------------------
+
+    summary_rows.append({
+        "Analysis": analysis_name,
+        "Total_Tests": len(df),
+        "Valid_Tests_N>=10": len(valid_df),
+        "Raw_Significant_p<0.05": raw_significant,
+        "FDR_Significant_pFDR<0.05": fdr_significant
+    })
+
+    all_results.append(df)
+
 
 # ============================================================
-# 12. SUMMARY
+# 5. COMBINE ALL RESULTS
 # ============================================================
 
-print()
-print("=" * 60)
-print("FDR CORRECTION COMPLETED")
-print("=" * 60)
+if all_results:
 
-
-for analysis_name in analysis_names:
-
-    analysis_df = combined[
-        combined["Analysis"] == analysis_name
-    ]
-
-    valid_count = int(
-        analysis_df["p_FDR"].notna().sum()
+    all_final_results = pd.concat(
+        all_results,
+        ignore_index=True
     )
 
-    raw_count = int(
-        analysis_df["Significant_raw"].sum()
+    combined_file = os.path.join(
+        OUTPUT_DIR,
+        "all_final_fdr_results.csv"
     )
 
-    fdr_count = int(
-        analysis_df["Significant_FDR"].sum()
+    all_final_results.to_csv(
+        combined_file,
+        index=False
     )
 
-    print()
+    print("\n" + "=" * 70)
+    print("Combined FDR results saved:")
+    print(combined_file)
+
+
+# ============================================================
+# 6. SAVE SUMMARY
+# ============================================================
+
+if summary_rows:
+
+    summary_df = pd.DataFrame(
+        summary_rows
+    )
+
+    summary_file = os.path.join(
+        OUTPUT_DIR,
+        "fdr_summary.csv"
+    )
+
+    summary_df.to_csv(
+        summary_file,
+        index=False
+    )
+
+    print("\nFDR SUMMARY")
+    print(summary_df.to_string(index=False))
+
     print(
-        f"{analysis_name}:"
+        f"\nSaved summary: {summary_file}"
     )
 
+
+# ============================================================
+# 7. FINAL TOTAL
+# ============================================================
+
+if summary_rows:
+
+    total_fdr = sum(
+        row["FDR_Significant_pFDR<0.05"]
+        for row in summary_rows
+    )
+
+    print("\n" + "=" * 70)
     print(
-        f"  Valid tests: {valid_count}"
+        f"TOTAL FDR-SIGNIFICANT RELATIONSHIPS: {total_fdr}"
     )
-
-    print(
-        f"  Raw significant: {raw_count}"
-    )
-
-    print(
-        f"  FDR significant: {fdr_count}"
-    )
-
-
-print()
-print(
-    f"Combined results:\n"
-    f"{combined_file}"
-)
-
-print(
-    f"FDR-significant results:\n"
-    f"{significant_file}"
-)
-
-print("=" * 60)
+    print("=" * 70)
