@@ -12,7 +12,7 @@ from scipy.stats import pearsonr
 #
 # AI-Wellbeing-Project/
 # ├── Code/
-# │   └── 02_same_day_analysis.py
+# │   └── 03_lagged_analysis.py
 # ├── data/
 # │   └── pmdata/
 # └── results/
@@ -50,12 +50,12 @@ DEVIATION_FILE = os.path.join(
 OUTPUT_DIR = os.path.join(
     BASE_DIR,
     "results",
-    "same_day"
+    "lagged"
 )
 
 OUTPUT_FILE = os.path.join(
     OUTPUT_DIR,
-    "same_day_behavior_wellbeing_relationships.csv"
+    "lagged_behavior_wellbeing_relationships.csv"
 )
 
 os.makedirs(
@@ -186,11 +186,11 @@ if not os.path.exists(DATA_DIR):
 
 
 # ============================================================
-# 6. LOAD BASELINE AND DEVIATION DATA
+# 6. LOAD PERSONALIZED DEVIATIONS
 # ============================================================
 
 print("=" * 70)
-print("SAME-DAY BEHAVIOR-WELLBEING ANALYSIS")
+print("LAGGED BEHAVIOR-WELLBEING ANALYSIS")
 print("=" * 70)
 
 print(
@@ -215,13 +215,17 @@ print(
 
 print()
 
-print("Loading personalized baseline data...")
+print(
+    "Loading personalized baseline data..."
+)
 
 baselines = pd.read_csv(
     BASELINE_FILE
 )
 
-print("Loading personalized daily deviations...")
+print(
+    "Loading personalized daily deviations..."
+)
 
 deviations = pd.read_csv(
     DEVIATION_FILE
@@ -272,10 +276,12 @@ deviations = deviations.sort_values(
 
 
 # ============================================================
-# 9. BUILD SAME-DAY WELLBEING DATA
+# 9. BUILD NEXT-DAY WELLBEING DATA
 # ============================================================
 
-print("Loading participant files...")
+print(
+    "Loading participant files..."
+)
 
 all_wellbeing = []
 
@@ -357,6 +363,10 @@ for filename in participant_files:
     if baseline_n < MIN_BASELINE_N:
         continue
 
+    # --------------------------------------------------------
+    # Analysis period = second half
+    # --------------------------------------------------------
+
     analysis_df = df.iloc[
         baseline_n:
     ].copy()
@@ -408,28 +418,55 @@ wellbeing = wellbeing.dropna(
 
 
 # ============================================================
-# 10. MERGE BEHAVIORAL DEVIATIONS
-#     WITH SAME-DAY WELLBEING
+# 10. CREATE NEXT-DAY WELLBEING ALIGNMENT
+# ============================================================
+
+print(
+    "Creating one-day lag alignment..."
+)
+
+# Wellbeing on day t+1 is aligned with behavioral
+# deviation on day t.
+#
+# For each participant:
+#   behavior Date = t
+#   wellbeing Date = t+1
+#
+# We therefore shift the wellbeing date backward
+# by one day so that it can be merged with behavior.
+
+wellbeing["Behavior_Date"] = (
+    wellbeing["Date"]
+    - pd.Timedelta(days=1)
+)
+
+
+# ============================================================
+# 11. MERGE LAGGED DATA
 # ============================================================
 
 print(
     "Merging behavioral deviations "
-    "with same-day wellbeing..."
+    "with next-day wellbeing..."
 )
 
 merged = pd.merge(
     deviations,
     wellbeing,
-    on=[
+    left_on=[
         "Participant",
         "Date",
+    ],
+    right_on=[
+        "Participant",
+        "Behavior_Date",
     ],
     how="inner"
 )
 
 if merged.empty:
     raise RuntimeError(
-        "The merge produced no matching "
+        "The lagged merge produced no matching "
         "participant-date rows."
     )
 
@@ -443,12 +480,12 @@ merged = merged.sort_values(
 
 
 # ============================================================
-# 11. PARTICIPANT-LEVEL SAME-DAY ANALYSIS
+# 12. PARTICIPANT-LEVEL LAGGED ANALYSIS
 # ============================================================
 
 print(
     "Calculating participant-level "
-    "same-day correlations..."
+    "lagged correlations..."
 )
 
 results = []
@@ -509,7 +546,7 @@ for participant in participants:
 
 
 # ============================================================
-# 12. SAVE RESULTS
+# 13. SAVE RESULTS
 # ============================================================
 
 results_df = pd.DataFrame(
@@ -523,7 +560,7 @@ results_df.to_csv(
 
 
 # ============================================================
-# 13. SUMMARY
+# 14. SUMMARY
 # ============================================================
 
 included = results_df[
@@ -532,7 +569,7 @@ included = results_df[
 
 print()
 print("=" * 70)
-print("SAME-DAY ANALYSIS COMPLETED")
+print("LAGGED ANALYSIS COMPLETED")
 print("=" * 70)
 
 print(
@@ -548,6 +585,11 @@ print(
 print(
     f"Relationships with N >= {MIN_N}: "
     f"{len(included)}"
+)
+
+print(
+    "Lag definition: "
+    "behavior on day t -> wellbeing on day t+1"
 )
 
 print(
