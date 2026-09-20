@@ -5,14 +5,25 @@ from scipy.stats import pearsonr
 
 
 # ============================================================
-# 1. PATHS
+# 1. PROJECT PATHS
 # ============================================================
+
+# Current project structure:
+#
+# AI-Wellbeing-Project/
+# ├── Code/
+# │   └── 02_same_day_analysis.py
+# ├── data/
+# │   └── pmdata/
+# └── results/
+#
+# Therefore:
+# dirname(__file__)          -> Code
+# dirname(dirname(__file__)) -> AI-Wellbeing-Project
 
 BASE_DIR = os.path.dirname(
     os.path.dirname(
-        os.path.dirname(
-            os.path.abspath(__file__)
-        )
+        os.path.abspath(__file__)
     )
 )
 
@@ -133,8 +144,6 @@ def safe_pearson(x, y):
     if not np.isfinite(y_values).all():
         return np.nan, np.nan, n
 
-    # Pearson correlation cannot be calculated
-    # when one variable has no variation.
     if np.std(x_values, ddof=1) == 0:
         return np.nan, np.nan, n
 
@@ -179,6 +188,32 @@ if not os.path.exists(DATA_DIR):
 # ============================================================
 # 6. LOAD BASELINE AND DEVIATION DATA
 # ============================================================
+
+print("=" * 70)
+print("SAME-DAY BEHAVIOR-WELLBEING ANALYSIS")
+print("=" * 70)
+
+print(
+    f"Project directory: {BASE_DIR}"
+)
+
+print(
+    f"Data directory: {DATA_DIR}"
+)
+
+print(
+    f"Baseline file: {BASELINE_FILE}"
+)
+
+print(
+    f"Deviation file: {DEVIATION_FILE}"
+)
+
+print(
+    f"Output file: {OUTPUT_FILE}"
+)
+
+print()
 
 print("Loading personalized baseline data...")
 
@@ -273,13 +308,17 @@ for filename in participant_files:
         filename
     )
 
-    df = pd.read_csv(filepath)
+    df = pd.read_csv(
+        filepath
+    )
 
     if "Date" not in df.columns:
+
         print(
             f"Skipping {participant}: "
             "Date column not found."
         )
+
         continue
 
     df["Date"] = pd.to_datetime(
@@ -295,7 +334,6 @@ for filename in participant_files:
         "Date"
     )
 
-    # Remove duplicate dates.
     df = df.drop_duplicates(
         subset=["Date"],
         keep="first"
@@ -319,13 +357,10 @@ for filename in participant_files:
     if baseline_n < MIN_BASELINE_N:
         continue
 
-    # Second 50% = analysis period
     analysis_df = df.iloc[
         baseline_n:
     ].copy()
 
-    # Keep only wellbeing variables
-    # that actually exist.
     available_wellbeing = [
         variable
         for variable in WELLBEING_VARIABLES
@@ -496,9 +531,9 @@ included = results_df[
 ]
 
 print()
-print("=" * 60)
+print("=" * 70)
 print("SAME-DAY ANALYSIS COMPLETED")
-print("=" * 60)
+print("=" * 70)
 
 print(
     f"Participants analyzed: "
@@ -520,4 +555,4 @@ print(
     f"{OUTPUT_FILE}"
 )
 
-print("=" * 60)
+print("=" * 70)
