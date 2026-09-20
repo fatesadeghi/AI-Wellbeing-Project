@@ -1,10 +1,14 @@
 import os
 import pandas as pd
+import numpy as np
 
 
 # ============================================================
 # 1. PATHS
 # ============================================================
+
+# Current file:
+# AI-Wellbeing-Project/ML/Code/09_feature_availability.py
 
 BASE_DIR = os.path.dirname(
     os.path.dirname(
@@ -20,17 +24,24 @@ DATA_DIR = os.path.join(
     "pmdata"
 )
 
-OUTPUT_DIR = os.path.join(
+RESULTS_DIR = os.path.join(
     BASE_DIR,
-    "results",
+    "results"
+)
+
+OUTPUT_DIR = os.path.join(
+    RESULTS_DIR,
     "ml"
 )
 
-os.makedirs(OUTPUT_DIR, exist_ok=True)
+os.makedirs(
+    OUTPUT_DIR,
+    exist_ok=True
+)
 
 
 # ============================================================
-# 2. VARIABLES
+# 2. SETTINGS
 # ============================================================
 
 BEHAVIOR_VARS = [
@@ -46,72 +57,137 @@ BEHAVIOR_VARS = [
     "Sleep_Restlessness",
     "Sleep_Composition",
     "Sleep_Revitalization",
-    "Sleep_Score",
+    "Sleep_Score"
 ]
 
-ACTIVITY_VARS = [
-    "Steps",
-    "Exercise_Count",
-    "Exercise_Duration",
-    "Exercise_Distance",
-    "Exercise_Calories",
-    "Exercise_Avg_HR",
-]
+FIRST_10_DAYS = 10
 
-SLEEP_VARS = [
+SLEEP_VARIABLES = [
     "Sleep_Hours",
     "Sleep_Duration_Score",
     "Deep_Sleep_Minutes",
     "Sleep_Restlessness",
     "Sleep_Composition",
     "Sleep_Revitalization",
-    "Sleep_Score",
+    "Sleep_Score"
 ]
 
 
 # ============================================================
-# 3. FIND PARTICIPANTS
+# 3. HELPER FUNCTIONS
+# ============================================================
+
+def longest_missing_streak(series):
+    """
+    Calculate the longest consecutive missing streak.
+    """
+
+    missing = series.isna().astype(int)
+
+    if missing.empty:
+        return 0
+
+    groups = (
+        missing.ne(
+            missing.shift()
+        ).cumsum()
+    )
+
+    streaks = (
+        missing
+        .groupby(groups)
+        .sum()
+    )
+
+    if len(streaks) == 0:
+        return 0
+
+    return int(
+        streaks.max()
+    )
+
+
+def first_10_days_missing(df, variable):
+    """
+    Check whether the variable is completely missing
+    during the first 10 consecutive days.
+    """
+
+    first_days = (
+        df[
+            ["Date", variable]
+        ]
+        .sort_values("Date")
+        .head(FIRST_10_DAYS)
+    )
+
+    if len(first_days) < FIRST_10_DAYS:
+        return False
+
+    return bool(
+        first_days[variable].isna().all()
+    )
+
+
+# ============================================================
+# 4. FIND PARTICIPANTS
 # ============================================================
 
 participant_files = sorted(
     [
-        f
-        for f in os.listdir(DATA_DIR)
-        if f.startswith("p")
-        and f.endswith("_daily_merged.csv")
+        filename
+        for filename in os.listdir(DATA_DIR)
+        if filename.endswith(".csv")
+        and filename.startswith("p")
     ]
 )
+
+if not participant_files:
+    raise FileNotFoundError(
+        f"No participant CSV files found in:\n{DATA_DIR}"
+    )
+
 
 print("=" * 70)
 print("FEATURE AVAILABILITY ANALYSIS")
 print("=" * 70)
-print(f"Participants found: {len(participant_files)}")
+
+print(
+    f"Participants found: {len(participant_files)}"
+)
 
 
 # ============================================================
-# 4. CHECK FIRST 10 CONSECUTIVE DAYS
+# 5. ANALYZE EACH PARTICIPANT
 # ============================================================
 
-rows = []
+availability_rows = []
+
 
 for filename in participant_files:
 
-    participant = filename.replace(
-        "_daily_merged.csv",
-        ""
-    )
+    participant = os.path.splitext(
+        filename
+    )[0]
 
-    filepath = os.path.join(
+    file_path = os.path.join(
         DATA_DIR,
         filename
     )
 
-    df = pd.read_csv(filepath)
+    df = pd.read_csv(
+        file_path
+    )
+
+    print("\n" + "-" * 70)
+    print(f"Processing: {participant}")
 
     if "Date" not in df.columns:
+
         print(
             f"WARNING: Date column missing for {participant}"
         )
+
         continue
 
     df["Date"] = pd.to_datetime(
@@ -120,11 +196,20 @@ for filename in participant_files:
     )
 
     df = (
-        df
-        .dropna(subset=["Date"])
+        df.dropna(subset=["Date"])
         .sort_values("Date")
+        .drop_duplicates(
+            subset="Date",
+            keep="first"
+        )
         .reset_index(drop=True)
     )
+
+    total_rows = len(df)
+
+    # --------------------------------------------------------
+    # Behavioral variables
+    # --------------------------------------------------------
 
     for variable in BEHAVIOR_VARS:
 
@@ -134,177 +219,231 @@ for filename in participant_files:
 
         if variable not in df.columns:
 
-            total_days = len(df)
-
-            missing_days = total_days
-
-            first_10_missing = (
-                variable in ACTIVITY_VARS
-                and total_days >= 10
-            )
-
-            longest_streak = total_days
-
-        else:
-
-            missing = df[variable].isna()
-
-            total_days = len(df)
-
-            missing_days = int(
-                missing.sum()
-            )
-
-            # ------------------------------------------------
-            # Longest consecutive missing streak
-            # ------------------------------------------------
-
-            groups = (
-                missing
-                .ne(missing.shift())
-                .cumsum()
-            )
-
-            streaks = (
-                missing
-                .groupby(groups)
-                .sum()
-            )
-
-            longest_streak = int(
-                streaks.max()
-            ) if len(streaks) else 0
-
-            # ------------------------------------------------
-            # FIRST 10 DAYS
-            # ------------------------------------------------
-
-            first_10_missing = (
-                variable in ACTIVITY_VARS
-                and total_days >= 10
-                and missing.iloc[:10].all()
-            )
-
-        # ----------------------------------------------------
-        # Classification
-        # ----------------------------------------------------
-
-        if variable in SLEEP_VARS:
-
-            status = "Available_Sleep_Exempt"
-
-        elif first_10_missing:
-
-            status = "Excluded_First_10_Days_Missing"
-
-        elif missing_days == 0:
-
-            status = "Available"
-
-        elif longest_streak >= 10:
-
-            status = "Available_With_Long_Missing_Streak"
-
-        else:
-
-            status = "Available_With_Missing"
-
-        rows.append(
-            {
+            availability_rows.append({
                 "Participant": participant,
                 "Variable": variable,
                 "Variable_Type": (
-                    "Activity_Exercise"
-                    if variable in ACTIVITY_VARS
-                    else "Sleep"
+                    "Sleep"
+                    if variable in SLEEP_VARIABLES
+                    else "Activity"
                 ),
-                "Total_Days": total_days,
-                "Missing_Days": missing_days,
-                "Missing_Percentage": (
-                    round(
-                        100 * missing_days / total_days,
-                        2
-                    )
-                    if total_days > 0
-                    else 100.0
-                ),
-                "Longest_Missing_Streak": longest_streak,
-                "First_10_Days_All_Missing": (
-                    bool(first_10_missing)
-                ),
-                "Status": status,
-            }
+                "Status": "Missing_Column",
+                "Total_Rows": total_rows,
+                "Missing_Count": np.nan,
+                "Missing_Percent": np.nan,
+                "Longest_Missing_Streak": np.nan,
+                "First_10_Days_All_Missing": False
+            })
+
+            continue
+
+        missing_count = int(
+            df[variable].isna().sum()
+        )
+
+        missing_percent = (
+            missing_count / total_rows * 100
+            if total_rows > 0
+            else np.nan
+        )
+
+        longest_streak = longest_missing_streak(
+            df[variable]
+        )
+
+        is_sleep = (
+            variable in SLEEP_VARIABLES
+        )
+
+        first10_missing = first_10_days_missing(
+            df,
+            variable
+        )
+
+        # ----------------------------------------------------
+        # Status
+        # ----------------------------------------------------
+
+        if is_sleep:
+
+            # Sleep variables are exempt from the
+            # first-10-days exclusion rule.
+
+            if missing_count == 0:
+
+                status = "Available_Sleep_Exempt"
+
+            else:
+
+                status = "Available_With_Missing"
+
+        else:
+
+            if first10_missing:
+
+                status = (
+                    "Excluded_First_10_Days_Missing"
+                )
+
+            elif missing_count == 0:
+
+                status = "Available"
+
+            elif longest_streak >= FIRST_10_DAYS:
+
+                # Missing streak later in the record does
+                # not trigger exclusion, but is reported.
+
+                status = (
+                    "Available_With_Long_Missing_Streak"
+                )
+
+            else:
+
+                status = "Available_With_Missing"
+
+        availability_rows.append({
+            "Participant": participant,
+            "Variable": variable,
+            "Variable_Type": (
+                "Sleep"
+                if is_sleep
+                else "Activity"
+            ),
+            "Status": status,
+            "Total_Rows": total_rows,
+            "Missing_Count": missing_count,
+            "Missing_Percent": missing_percent,
+            "Longest_Missing_Streak": longest_streak,
+            "First_10_Days_All_Missing": first10_missing
+        })
+
+        print(
+            f"{variable}: {status} | "
+            f"missing={missing_count}/{total_rows} | "
+            f"longest_streak={longest_streak}"
         )
 
 
 # ============================================================
-# 5. SAVE FULL AVAILABILITY TABLE
+# 6. CREATE REPORT
 # ============================================================
 
-availability = pd.DataFrame(rows)
+availability_df = pd.DataFrame(
+    availability_rows
+)
 
-output_file = os.path.join(
+
+# ============================================================
+# 7. SAVE DETAILED REPORT
+# ============================================================
+
+DETAILED_FILE = os.path.join(
     OUTPUT_DIR,
     "ml_feature_availability.csv"
 )
 
-availability.to_csv(
-    output_file,
+availability_df.to_csv(
+    DETAILED_FILE,
     index=False
 )
 
 
 # ============================================================
-# 6. SUMMARY
+# 8. STATUS SUMMARY
 # ============================================================
 
-print()
-print("=" * 70)
-print("AVAILABILITY SUMMARY")
-print("=" * 70)
-
-print(
-    availability[
+status_summary = (
+    availability_df[
         "Status"
-    ].value_counts()
+    ]
+    .value_counts()
+    .rename_axis("Status")
+    .reset_index(
+        name="Count"
+    )
+)
+
+
+SUMMARY_FILE = os.path.join(
+    OUTPUT_DIR,
+    "ml_feature_availability_summary.csv"
+)
+
+status_summary.to_csv(
+    SUMMARY_FILE,
+    index=False
 )
 
 
 # ============================================================
-# 7. SHOW AUTOMATIC EXCLUSIONS
+# 9. EXCLUDED FEATURES
 # ============================================================
 
-excluded = availability[
-    availability["Status"]
-    == "Excluded_First_10_Days_Missing"
-]
+excluded_df = availability_df[
+    availability_df["Status"]
+    ==
+    "Excluded_First_10_Days_Missing"
+].copy()
 
-print()
+
+EXCLUDED_FILE = os.path.join(
+    OUTPUT_DIR,
+    "ml_excluded_features.csv"
+)
+
+excluded_df.to_csv(
+    EXCLUDED_FILE,
+    index=False
+)
+
+
+# ============================================================
+# 10. PRINT FINAL SUMMARY
+# ============================================================
+
+print("\n" + "=" * 70)
+print("FEATURE AVAILABILITY SUMMARY")
 print("=" * 70)
-print("AUTOMATIC EXCLUSIONS")
-print("=" * 70)
 
-if excluded.empty:
+print(
+    status_summary.to_string(
+        index=False
+    )
+)
 
-    print("No activity/exercise variable meets the rule.")
+print("\nExcluded features:")
+print(
+    f"{len(excluded_df)}"
+)
 
-else:
+if len(excluded_df) > 0:
 
     print(
-        excluded[
+        excluded_df[
             [
                 "Participant",
                 "Variable",
-                "Total_Days",
-                "Missing_Days",
-                "Longest_Missing_Streak",
-                "Status",
+                "Missing_Count",
+                "Total_Rows",
+                "Longest_Missing_Streak"
             ]
-        ].to_string(index=False)
+        ].to_string(
+            index=False
+        )
     )
 
+print("\nOutput files:")
+print(
+    f"  {DETAILED_FILE}"
+)
+print(
+    f"  {SUMMARY_FILE}"
+)
+print(
+    f"  {EXCLUDED_FILE}"
+)
 
-print()
-print("=" * 70)
-print(f"Saved: {output_file}")
+print("\n" + "=" * 70)
+print("FEATURE AVAILABILITY ANALYSIS COMPLETE")
 print("=" * 70)
