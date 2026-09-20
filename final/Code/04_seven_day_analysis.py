@@ -51,13 +51,18 @@ MIN_BASELINE_N = 7
 
 BEHAVIOR_VARIABLES = [
     "Steps",
-    "Sleep_Duration_Score",
-    "Sleep_Score",
-    "Sleep_Deep_Minutes",
-    "Sleep_Restlessness",
+    "Exercise_Count",
+    "Exercise_Duration",
     "Exercise_Distance",
     "Exercise_Calories",
-    "Exercise_Duration",
+    "Exercise_Avg_HR",
+    "Sleep_Hours",
+    "Sleep_Duration_Score",
+    "Deep_Sleep_Minutes",
+    "Sleep_Restlessness",
+    "Sleep_Composition",
+    "Sleep_Revitalization",
+    "Sleep_Score",
 ]
 
 WELLBEING_VARIABLES = [
