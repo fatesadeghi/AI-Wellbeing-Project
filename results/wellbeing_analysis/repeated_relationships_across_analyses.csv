@@ -1,0 +1,4 @@
+Participant,Behavioral_Variable,Wellness_Variable,Same_Day,One_Day_Lagged,Previous_7_Days,Number_of_Analyses
+p01,|,Exercise_Distance | readiness,False,True,True,2
+p02,|,Exercise_Duration | readiness,True,False,True,2
+p08,|,Steps | readiness,True,False,True,2

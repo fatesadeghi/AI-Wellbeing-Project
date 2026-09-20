@@ -1,0 +1,92 @@
+Behavioral_Variable,Feature,Feature_Type
+Steps,Steps_raw,Raw value
+Steps,Steps_deviation,Deviation from baseline median
+Steps,Steps_z,Personalized Z-score
+Steps,Steps_abs_z,Absolute personalized Z-score
+Steps,Steps_7d_mean,Previous 7-day mean
+Steps,Steps_7d_std,Previous 7-day standard deviation
+Steps,Steps_1d_change,One-day change
+Exercise_Count,Exercise_Count_raw,Raw value
+Exercise_Count,Exercise_Count_deviation,Deviation from baseline median
+Exercise_Count,Exercise_Count_z,Personalized Z-score
+Exercise_Count,Exercise_Count_abs_z,Absolute personalized Z-score
+Exercise_Count,Exercise_Count_7d_mean,Previous 7-day mean
+Exercise_Count,Exercise_Count_7d_std,Previous 7-day standard deviation
+Exercise_Count,Exercise_Count_1d_change,One-day change
+Exercise_Duration,Exercise_Duration_raw,Raw value
+Exercise_Duration,Exercise_Duration_deviation,Deviation from baseline median
+Exercise_Duration,Exercise_Duration_z,Personalized Z-score
+Exercise_Duration,Exercise_Duration_abs_z,Absolute personalized Z-score
+Exercise_Duration,Exercise_Duration_7d_mean,Previous 7-day mean
+Exercise_Duration,Exercise_Duration_7d_std,Previous 7-day standard deviation
+Exercise_Duration,Exercise_Duration_1d_change,One-day change
+Exercise_Distance,Exercise_Distance_raw,Raw value
+Exercise_Distance,Exercise_Distance_deviation,Deviation from baseline median
+Exercise_Distance,Exercise_Distance_z,Personalized Z-score
+Exercise_Distance,Exercise_Distance_abs_z,Absolute personalized Z-score
+Exercise_Distance,Exercise_Distance_7d_mean,Previous 7-day mean
+Exercise_Distance,Exercise_Distance_7d_std,Previous 7-day standard deviation
+Exercise_Distance,Exercise_Distance_1d_change,One-day change
+Exercise_Calories,Exercise_Calories_raw,Raw value
+Exercise_Calories,Exercise_Calories_deviation,Deviation from baseline median
+Exercise_Calories,Exercise_Calories_z,Personalized Z-score
+Exercise_Calories,Exercise_Calories_abs_z,Absolute personalized Z-score
+Exercise_Calories,Exercise_Calories_7d_mean,Previous 7-day mean
+Exercise_Calories,Exercise_Calories_7d_std,Previous 7-day standard deviation
+Exercise_Calories,Exercise_Calories_1d_change,One-day change
+Exercise_Avg_HR,Exercise_Avg_HR_raw,Raw value
+Exercise_Avg_HR,Exercise_Avg_HR_deviation,Deviation from baseline median
+Exercise_Avg_HR,Exercise_Avg_HR_z,Personalized Z-score
+Exercise_Avg_HR,Exercise_Avg_HR_abs_z,Absolute personalized Z-score
+Exercise_Avg_HR,Exercise_Avg_HR_7d_mean,Previous 7-day mean
+Exercise_Avg_HR,Exercise_Avg_HR_7d_std,Previous 7-day standard deviation
+Exercise_Avg_HR,Exercise_Avg_HR_1d_change,One-day change
+Sleep_Hours,Sleep_Hours_raw,Raw value
+Sleep_Hours,Sleep_Hours_deviation,Deviation from baseline median
+Sleep_Hours,Sleep_Hours_z,Personalized Z-score
+Sleep_Hours,Sleep_Hours_abs_z,Absolute personalized Z-score
+Sleep_Hours,Sleep_Hours_7d_mean,Previous 7-day mean
+Sleep_Hours,Sleep_Hours_7d_std,Previous 7-day standard deviation
+Sleep_Hours,Sleep_Hours_1d_change,One-day change
+Sleep_Duration_Score,Sleep_Duration_Score_raw,Raw value
+Sleep_Duration_Score,Sleep_Duration_Score_deviation,Deviation from baseline median
+Sleep_Duration_Score,Sleep_Duration_Score_z,Personalized Z-score
+Sleep_Duration_Score,Sleep_Duration_Score_abs_z,Absolute personalized Z-score
+Sleep_Duration_Score,Sleep_Duration_Score_7d_mean,Previous 7-day mean
+Sleep_Duration_Score,Sleep_Duration_Score_7d_std,Previous 7-day standard deviation
+Sleep_Duration_Score,Sleep_Duration_Score_1d_change,One-day change
+Deep_Sleep_Minutes,Deep_Sleep_Minutes_raw,Raw value
+Deep_Sleep_Minutes,Deep_Sleep_Minutes_deviation,Deviation from baseline median
+Deep_Sleep_Minutes,Deep_Sleep_Minutes_z,Personalized Z-score
+Deep_Sleep_Minutes,Deep_Sleep_Minutes_abs_z,Absolute personalized Z-score
+Deep_Sleep_Minutes,Deep_Sleep_Minutes_7d_mean,Previous 7-day mean
+Deep_Sleep_Minutes,Deep_Sleep_Minutes_7d_std,Previous 7-day standard deviation
+Deep_Sleep_Minutes,Deep_Sleep_Minutes_1d_change,One-day change
+Sleep_Restlessness,Sleep_Restlessness_raw,Raw value
+Sleep_Restlessness,Sleep_Restlessness_deviation,Deviation from baseline median
+Sleep_Restlessness,Sleep_Restlessness_z,Personalized Z-score
+Sleep_Restlessness,Sleep_Restlessness_abs_z,Absolute personalized Z-score
+Sleep_Restlessness,Sleep_Restlessness_7d_mean,Previous 7-day mean
+Sleep_Restlessness,Sleep_Restlessness_7d_std,Previous 7-day standard deviation
+Sleep_Restlessness,Sleep_Restlessness_1d_change,One-day change
+Sleep_Composition,Sleep_Composition_raw,Raw value
+Sleep_Composition,Sleep_Composition_deviation,Deviation from baseline median
+Sleep_Composition,Sleep_Composition_z,Personalized Z-score
+Sleep_Composition,Sleep_Composition_abs_z,Absolute personalized Z-score
+Sleep_Composition,Sleep_Composition_7d_mean,Previous 7-day mean
+Sleep_Composition,Sleep_Composition_7d_std,Previous 7-day standard deviation
+Sleep_Composition,Sleep_Composition_1d_change,One-day change
+Sleep_Revitalization,Sleep_Revitalization_raw,Raw value
+Sleep_Revitalization,Sleep_Revitalization_deviation,Deviation from baseline median
+Sleep_Revitalization,Sleep_Revitalization_z,Personalized Z-score
+Sleep_Revitalization,Sleep_Revitalization_abs_z,Absolute personalized Z-score
+Sleep_Revitalization,Sleep_Revitalization_7d_mean,Previous 7-day mean
+Sleep_Revitalization,Sleep_Revitalization_7d_std,Previous 7-day standard deviation
+Sleep_Revitalization,Sleep_Revitalization_1d_change,One-day change
+Sleep_Score,Sleep_Score_raw,Raw value
+Sleep_Score,Sleep_Score_deviation,Deviation from baseline median
+Sleep_Score,Sleep_Score_z,Personalized Z-score
+Sleep_Score,Sleep_Score_abs_z,Absolute personalized Z-score
+Sleep_Score,Sleep_Score_7d_mean,Previous 7-day mean
+Sleep_Score,Sleep_Score_7d_std,Previous 7-day standard deviation
+Sleep_Score,Sleep_Score_1d_change,One-day change
