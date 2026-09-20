@@ -5,15 +5,39 @@ from scipy.stats import pearsonr
 
 
 # ============================================================
-# 1. PATHS
+# 1. PROJECT PATHS
 # ============================================================
+
+# Current project structure:
+#
+# AI-Wellbeing-Project/
+# ├── Code/
+# │   └── 05_sensitivity_analysis.py
+# ├── data/
+# │   └── pmdata/
+# └── results/
+#
+# Therefore:
+# dirname(__file__)          -> Code
+# dirname(dirname(__file__)) -> AI-Wellbeing-Project
 
 BASE_DIR = os.path.dirname(
     os.path.dirname(
-        os.path.dirname(
-            os.path.abspath(__file__)
-        )
+        os.path.abspath(__file__)
     )
+)
+
+DATA_DIR = os.path.join(
+    BASE_DIR,
+    "data",
+    "pmdata"
+)
+
+BASELINE_FILE = os.path.join(
+    BASE_DIR,
+    "results",
+    "baseline",
+    "personalized_baselines.csv"
 )
 
 DEVIATION_FILE = os.path.join(
@@ -21,12 +45,6 @@ DEVIATION_FILE = os.path.join(
     "results",
     "baseline",
     "daily_personalized_deviations.csv"
-)
-
-DATA_DIR = os.path.join(
-    BASE_DIR,
-    "data",
-    "pmdata"
 )
 
 OUTPUT_DIR = os.path.join(
@@ -50,23 +68,19 @@ os.makedirs(
 # 2. SETTINGS
 # ============================================================
 
-Z_THRESHOLD = 1.0
 MIN_N = 10
 BASELINE_FRACTION = 0.50
 MIN_BASELINE_N = 7
+
+# Sensitivity threshold:
+# A day is considered an unusual/deviation day when
+# at least one behavioral variable has |Z| >= 1.0.
+SENSITIVITY_Z_THRESHOLD = 1.0
 
 
 # ============================================================
 # 3. VARIABLES
 # ============================================================
-
-WELLBEING_VARIABLES = [
-    "fatigue",
-    "mood",
-    "readiness",
-    "sleep_quality",
-    "stress",
-]
 
 BEHAVIOR_VARIABLES = [
     "Steps",
@@ -82,6 +96,14 @@ BEHAVIOR_VARIABLES = [
     "Sleep_Composition",
     "Sleep_Revitalization",
     "Sleep_Score",
+]
+
+WELLBEING_VARIABLES = [
+    "fatigue",
+    "mood",
+    "readiness",
+    "sleep_quality",
+    "stress",
 ]
 
 
@@ -146,12 +168,18 @@ def safe_pearson(x, y):
 
 
 # ============================================================
-# 5. CHECK REQUIRED PATHS
+# 5. CHECK REQUIRED FILES
 # ============================================================
+
+if not os.path.exists(BASELINE_FILE):
+    raise FileNotFoundError(
+        f"Personalized baseline file not found:\n"
+        f"{BASELINE_FILE}"
+    )
 
 if not os.path.exists(DEVIATION_FILE):
     raise FileNotFoundError(
-        f"Personalized deviation file not found:\n"
+        f"Daily personalized deviation file not found:\n"
         f"{DEVIATION_FILE}"
     )
 
@@ -163,14 +191,60 @@ if not os.path.exists(DATA_DIR):
 
 
 # ============================================================
-# 6. LOAD PERSONALIZED DEVIATIONS
+# 6. LOAD BASELINE AND DAILY DEVIATIONS
 # ============================================================
 
-print("Loading personalized deviations...")
+print("=" * 70)
+print("SENSITIVITY ANALYSIS")
+print("=" * 70)
+
+print(
+    f"Project directory: {BASE_DIR}"
+)
+
+print(
+    f"Data directory: {DATA_DIR}"
+)
+
+print(
+    f"Baseline file: {BASELINE_FILE}"
+)
+
+print(
+    f"Deviation file: {DEVIATION_FILE}"
+)
+
+print(
+    f"Output file: {OUTPUT_FILE}"
+)
+
+print(
+    f"Sensitivity threshold: |Z| >= "
+    f"{SENSITIVITY_Z_THRESHOLD}"
+)
+
+print()
+
+print(
+    "Loading personalized baseline data..."
+)
+
+baselines = pd.read_csv(
+    BASELINE_FILE
+)
+
+print(
+    "Loading personalized daily deviations..."
+)
 
 deviations = pd.read_csv(
     DEVIATION_FILE
 )
+
+
+# ============================================================
+# 7. VALIDATE DEVIATION DATA
+# ============================================================
 
 required_deviation_columns = [
     "Participant",
@@ -188,6 +262,11 @@ if missing_columns:
         "Missing required columns in deviation file: "
         + ", ".join(missing_columns)
     )
+
+
+# ============================================================
+# 8. DATE PREPARATION
+# ============================================================
 
 deviations["Date"] = pd.to_datetime(
     deviations["Date"],
@@ -207,10 +286,72 @@ deviations = deviations.sort_values(
 
 
 # ============================================================
-# 7. LOAD WELLBEING DATA
+# 9. IDENTIFY SENSITIVITY DAYS
 # ============================================================
 
-print("Loading wellbeing data...")
+print(
+    "Identifying days with behavioral "
+    "deviations at |Z| >= 1.0..."
+)
+
+z_columns = [
+    f"{behavior}_Z"
+    for behavior in BEHAVIOR_VARIABLES
+]
+
+available_z_columns = [
+    column
+    for column in z_columns
+    if column in deviations.columns
+]
+
+if not available_z_columns:
+    raise RuntimeError(
+        "No behavioral Z-score columns were found "
+        "in the deviation file."
+    )
+
+# A day is selected if at least one available
+# behavioral variable has |Z| >= threshold.
+
+abs_z = deviations[
+    available_z_columns
+].abs()
+
+deviations["Sensitivity_Day"] = (
+    abs_z >= SENSITIVITY_Z_THRESHOLD
+).any(
+    axis=1
+)
+
+sensitivity_days = deviations[
+    deviations["Sensitivity_Day"]
+].copy()
+
+print(
+    f"Total analysis-period rows: "
+    f"{len(deviations)}"
+)
+
+print(
+    f"Sensitivity rows selected: "
+    f"{len(sensitivity_days)}"
+)
+
+
+if sensitivity_days.empty:
+    raise RuntimeError(
+        "No days met the sensitivity threshold."
+    )
+
+
+# ============================================================
+# 10. LOAD SAME-DAY WELLBEING DATA
+# ============================================================
+
+print(
+    "Loading participant wellbeing data..."
+)
 
 all_wellbeing = []
 
@@ -248,6 +389,12 @@ for filename in participant_files:
     )
 
     if "Date" not in df.columns:
+
+        print(
+            f"Skipping {participant}: "
+            "Date column not found."
+        )
+
         continue
 
     df["Date"] = pd.to_datetime(
@@ -266,15 +413,17 @@ for filename in participant_files:
     df = df.drop_duplicates(
         subset=["Date"],
         keep="first"
-    ).reset_index(drop=True)
+    )
+
+    # --------------------------------------------------------
+    # Use the same chronological 50/50 split as baseline code
+    # --------------------------------------------------------
 
     n_total = len(df)
 
     if n_total < 2:
         continue
 
-    # Same chronological 50/50 split
-    # used in the other final analyses.
     baseline_n = int(
         np.floor(
             n_total * BASELINE_FRACTION
@@ -284,7 +433,7 @@ for filename in participant_files:
     if baseline_n < MIN_BASELINE_N:
         continue
 
-    # Second 50% = analysis period
+    # Second half = analysis period
     analysis_df = df.iloc[
         baseline_n:
     ].copy()
@@ -315,7 +464,8 @@ for filename in participant_files:
 
 if not all_wellbeing:
     raise RuntimeError(
-        "No wellbeing data found."
+        "No wellbeing data could be loaded "
+        "for the analysis period."
     )
 
 
@@ -335,16 +485,16 @@ wellbeing = wellbeing.dropna(
 
 
 # ============================================================
-# 8. MERGE
+# 11. MERGE SENSITIVITY DAYS WITH WELLBEING
 # ============================================================
 
 print(
-    "Matching behavioral deviations "
+    "Merging sensitivity days "
     "with same-day wellbeing..."
 )
 
 merged = pd.merge(
-    deviations,
+    sensitivity_days,
     wellbeing,
     on=[
         "Participant",
@@ -355,7 +505,8 @@ merged = pd.merge(
 
 if merged.empty:
     raise RuntimeError(
-        "No matching participant-date rows found."
+        "The merge produced no matching "
+        "participant-date rows."
     )
 
 merged = merged.sort_values(
@@ -367,22 +518,24 @@ merged = merged.sort_values(
 
 
 # ============================================================
-# 9. SENSITIVITY ANALYSIS
+# 12. PARTICIPANT-LEVEL SENSITIVITY ANALYSIS
 # ============================================================
 
 print(
-    f"Running sensitivity analysis "
-    f"with |Z| >= {Z_THRESHOLD}..."
+    "Calculating participant-level "
+    "sensitivity correlations..."
 )
 
 results = []
 
-
-for participant in sorted(
+participants = sorted(
     merged["Participant"]
     .dropna()
     .unique()
-):
+)
+
+
+for participant in participants:
 
     participant_data = merged[
         merged["Participant"] == participant
@@ -395,29 +548,17 @@ for participant in sorted(
         if z_column not in participant_data.columns:
             continue
 
-        # ----------------------------------------------------
-        # Select unusual behavioral days
-        # ----------------------------------------------------
+        for wellbeing_variable in WELLBEING_VARIABLES:
 
-        behavior_data = participant_data[
-            participant_data[z_column].abs()
-            >= Z_THRESHOLD
-        ].copy()
-
-        if behavior_data.empty:
-            continue
-
-        for wellbeing in WELLBEING_VARIABLES:
-
-            if wellbeing not in behavior_data.columns:
+            if wellbeing_variable not in participant_data.columns:
                 continue
 
-            x = behavior_data[
+            x = participant_data[
                 z_column
             ]
 
-            y = behavior_data[
-                wellbeing
+            y = participant_data[
+                wellbeing_variable
             ]
 
             r, p, n = safe_pearson(
@@ -429,8 +570,7 @@ for participant in sorted(
                 {
                     "Participant": participant,
                     "Behavioral_Variable": behavior,
-                    "Wellbeing_Variable": wellbeing,
-                    "Z_Threshold": Z_THRESHOLD,
+                    "Wellbeing_Variable": wellbeing_variable,
                     "r": r,
                     "p": p,
                     "N": n,
@@ -439,27 +579,20 @@ for participant in sorted(
                         if n >= MIN_N
                         else "No"
                     ),
+                    "Sensitivity_Threshold": (
+                        SENSITIVITY_Z_THRESHOLD
+                    ),
                 }
             )
 
 
 # ============================================================
-# 10. RESULTS DATAFRAME
+# 13. SAVE RESULTS
 # ============================================================
 
 results_df = pd.DataFrame(
     results
 )
-
-if results_df.empty:
-    raise RuntimeError(
-        "No sensitivity relationships were calculated."
-    )
-
-
-# ============================================================
-# 11. SAVE RESULTS
-# ============================================================
 
 results_df.to_csv(
     OUTPUT_FILE,
@@ -468,7 +601,7 @@ results_df.to_csv(
 
 
 # ============================================================
-# 12. SUMMARY
+# 14. SUMMARY
 # ============================================================
 
 included = results_df[
@@ -476,13 +609,9 @@ included = results_df[
 ]
 
 print()
-print("=" * 60)
+print("=" * 70)
 print("SENSITIVITY ANALYSIS COMPLETED")
-print("=" * 60)
-
-print(
-    f"Z threshold: |Z| >= {Z_THRESHOLD}"
-)
+print("=" * 70)
 
 print(
     f"Participants analyzed: "
@@ -490,7 +619,7 @@ print(
 )
 
 print(
-    f"Total relationships tested: "
+    f"Total sensitivity relationships tested: "
     f"{len(results_df)}"
 )
 
@@ -500,8 +629,19 @@ print(
 )
 
 print(
+    f"Sensitivity threshold: "
+    f"|Z| >= {SENSITIVITY_Z_THRESHOLD}"
+)
+
+print(
+    "Analysis type: "
+    "same-day participant-level Pearson correlation "
+    "on sensitivity-selected days"
+)
+
+print(
     f"Output saved to:\n"
     f"{OUTPUT_FILE}"
 )
 
-print("=" * 60)
+print("=" * 70)
