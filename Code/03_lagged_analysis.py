@@ -5,14 +5,25 @@ from scipy.stats import pearsonr
 
 
 # ============================================================
-# 1. PATHS
+# 1. PROJECT PATHS
 # ============================================================
+
+# Current project structure:
+#
+# AI-Wellbeing-Project/
+# ├── Code/
+# │   └── 02_same_day_analysis.py
+# ├── data/
+# │   └── pmdata/
+# └── results/
+#
+# Therefore:
+# dirname(__file__)          -> Code
+# dirname(dirname(__file__)) -> AI-Wellbeing-Project
 
 BASE_DIR = os.path.dirname(
     os.path.dirname(
-        os.path.dirname(
-            os.path.abspath(__file__)
-        )
+        os.path.abspath(__file__)
     )
 )
 
@@ -20,6 +31,13 @@ DATA_DIR = os.path.join(
     BASE_DIR,
     "data",
     "pmdata"
+)
+
+BASELINE_FILE = os.path.join(
+    BASE_DIR,
+    "results",
+    "baseline",
+    "personalized_baselines.csv"
 )
 
 DEVIATION_FILE = os.path.join(
@@ -32,15 +50,18 @@ DEVIATION_FILE = os.path.join(
 OUTPUT_DIR = os.path.join(
     BASE_DIR,
     "results",
-    "lagged"
+    "same_day"
 )
 
 OUTPUT_FILE = os.path.join(
     OUTPUT_DIR,
-    "lagged_behavior_wellbeing_relationships.csv"
+    "same_day_behavior_wellbeing_relationships.csv"
 )
 
-os.makedirs(OUTPUT_DIR, exist_ok=True)
+os.makedirs(
+    OUTPUT_DIR,
+    exist_ok=True
+)
 
 
 # ============================================================
@@ -87,8 +108,10 @@ WELLBEING_VARIABLES = [
 
 def safe_pearson(x, y):
     """
-    Calculate Pearson correlation after pairwise removal
-    of missing and non-finite values.
+    Calculate Pearson correlation safely.
+
+    Missing, infinite, and constant values are handled
+    before calculating the correlation.
 
     Returns:
         r, p, n
@@ -99,7 +122,7 @@ def safe_pearson(x, y):
             pd.Series(x, name="x"),
             pd.Series(y, name="y"),
         ],
-        axis=1,
+        axis=1
     )
 
     data = data.replace(
@@ -140,30 +163,96 @@ def safe_pearson(x, y):
 
 
 # ============================================================
-# 5. LOAD PERSONALIZED DEVIATIONS
+# 5. CHECK REQUIRED FILES
 # ============================================================
+
+if not os.path.exists(BASELINE_FILE):
+    raise FileNotFoundError(
+        f"Personalized baseline file not found:\n"
+        f"{BASELINE_FILE}"
+    )
 
 if not os.path.exists(DEVIATION_FILE):
     raise FileNotFoundError(
-        f"Personalized deviation file not found:\n"
+        f"Daily personalized deviation file not found:\n"
         f"{DEVIATION_FILE}"
     )
+
+if not os.path.exists(DATA_DIR):
+    raise FileNotFoundError(
+        f"PMData directory not found:\n"
+        f"{DATA_DIR}"
+    )
+
+
+# ============================================================
+# 6. LOAD BASELINE AND DEVIATION DATA
+# ============================================================
+
+print("=" * 70)
+print("SAME-DAY BEHAVIOR-WELLBEING ANALYSIS")
+print("=" * 70)
+
+print(
+    f"Project directory: {BASE_DIR}"
+)
+
+print(
+    f"Data directory: {DATA_DIR}"
+)
+
+print(
+    f"Baseline file: {BASELINE_FILE}"
+)
+
+print(
+    f"Deviation file: {DEVIATION_FILE}"
+)
+
+print(
+    f"Output file: {OUTPUT_FILE}"
+)
+
+print()
+
+print("Loading personalized baseline data...")
+
+baselines = pd.read_csv(
+    BASELINE_FILE
+)
+
+print("Loading personalized daily deviations...")
 
 deviations = pd.read_csv(
     DEVIATION_FILE
 )
 
-if "Participant" not in deviations.columns:
+
+# ============================================================
+# 7. VALIDATE DEVIATION DATA
+# ============================================================
+
+required_deviation_columns = [
+    "Participant",
+    "Date",
+]
+
+missing_columns = [
+    column
+    for column in required_deviation_columns
+    if column not in deviations.columns
+]
+
+if missing_columns:
     raise ValueError(
-        "Column 'Participant' is missing from "
-        "daily_personalized_deviations.csv"
+        "Missing required columns in deviation file: "
+        + ", ".join(missing_columns)
     )
 
-if "Date" not in deviations.columns:
-    raise ValueError(
-        "Column 'Date' is missing from "
-        "daily_personalized_deviations.csv"
-    )
+
+# ============================================================
+# 8. DATE PREPARATION
+# ============================================================
 
 deviations["Date"] = pd.to_datetime(
     deviations["Date"],
@@ -175,13 +264,18 @@ deviations = deviations.dropna(
 ).copy()
 
 deviations = deviations.sort_values(
-    ["Participant", "Date"]
+    [
+        "Participant",
+        "Date",
+    ]
 ).reset_index(drop=True)
 
 
 # ============================================================
-# 6. LOAD WELLBEING DATA
+# 9. BUILD SAME-DAY WELLBEING DATA
 # ============================================================
+
+print("Loading participant files...")
 
 all_wellbeing = []
 
@@ -189,13 +283,16 @@ participant_files = sorted(
     [
         filename
         for filename in os.listdir(DATA_DIR)
-        if filename.endswith("_daily_merged.csv")
+        if filename.endswith(
+            "_daily_merged.csv"
+        )
     ]
 )
 
 if not participant_files:
     raise RuntimeError(
-        f"No participant files found in:\n{DATA_DIR}"
+        f"No participant files found in:\n"
+        f"{DATA_DIR}"
     )
 
 
@@ -211,9 +308,17 @@ for filename in participant_files:
         filename
     )
 
-    df = pd.read_csv(filepath)
+    df = pd.read_csv(
+        filepath
+    )
 
     if "Date" not in df.columns:
+
+        print(
+            f"Skipping {participant}: "
+            "Date column not found."
+        )
+
         continue
 
     df["Date"] = pd.to_datetime(
@@ -234,12 +339,15 @@ for filename in participant_files:
         keep="first"
     )
 
+    # --------------------------------------------------------
+    # Use the same chronological 50/50 split as baseline code
+    # --------------------------------------------------------
+
     n_total = len(df)
 
     if n_total < 2:
         continue
 
-    # First 50% = personal baseline period
     baseline_n = int(
         np.floor(
             n_total * BASELINE_FRACTION
@@ -249,8 +357,9 @@ for filename in participant_files:
     if baseline_n < MIN_BASELINE_N:
         continue
 
-    # Second 50% = analysis period
-    analysis_df = df.iloc[baseline_n:].copy()
+    analysis_df = df.iloc[
+        baseline_n:
+    ].copy()
 
     available_wellbeing = [
         variable
@@ -278,7 +387,8 @@ for filename in participant_files:
 
 if not all_wellbeing:
     raise RuntimeError(
-        "No wellbeing data found for analysis."
+        "No wellbeing data could be loaded "
+        "for the analysis period."
     )
 
 
@@ -298,36 +408,18 @@ wellbeing = wellbeing.dropna(
 
 
 # ============================================================
-# 7. CREATE NEXT-DAY WELLBEING
+# 10. MERGE BEHAVIORAL DEVIATIONS
+#     WITH SAME-DAY WELLBEING
 # ============================================================
 
-# Behavior on day t
-#        ↓
-# Wellbeing on day t+1
-
-wellbeing_next = wellbeing.copy()
-
-wellbeing_next["Date"] = (
-    wellbeing_next["Date"]
-    - pd.Timedelta(days=1)
+print(
+    "Merging behavioral deviations "
+    "with same-day wellbeing..."
 )
-
-wellbeing_next = wellbeing_next.rename(
-    columns={
-        variable: f"{variable}_NextDay"
-        for variable in WELLBEING_VARIABLES
-        if variable in wellbeing_next.columns
-    }
-)
-
-
-# ============================================================
-# 8. MERGE BEHAVIOR DEVIATIONS WITH NEXT-DAY WELLBEING
-# ============================================================
 
 merged = pd.merge(
     deviations,
-    wellbeing_next,
+    wellbeing,
     on=[
         "Participant",
         "Date",
@@ -337,9 +429,10 @@ merged = pd.merge(
 
 if merged.empty:
     raise RuntimeError(
-        "Merged dataset is empty. "
-        "Check participant IDs and dates."
+        "The merge produced no matching "
+        "participant-date rows."
     )
+
 
 merged = merged.sort_values(
     [
@@ -350,8 +443,13 @@ merged = merged.sort_values(
 
 
 # ============================================================
-# 9. PARTICIPANT-LEVEL LAGGED ANALYSIS
+# 11. PARTICIPANT-LEVEL SAME-DAY ANALYSIS
 # ============================================================
+
+print(
+    "Calculating participant-level "
+    "same-day correlations..."
+)
 
 results = []
 
@@ -377,15 +475,16 @@ for participant in participants:
 
         for wellbeing_variable in WELLBEING_VARIABLES:
 
-            next_day_column = (
-                f"{wellbeing_variable}_NextDay"
-            )
-
-            if next_day_column not in participant_data.columns:
+            if wellbeing_variable not in participant_data.columns:
                 continue
 
-            x = participant_data[z_column]
-            y = participant_data[next_day_column]
+            x = participant_data[
+                z_column
+            ]
+
+            y = participant_data[
+                wellbeing_variable
+            ]
 
             r, p, n = safe_pearson(
                 x,
@@ -395,18 +494,22 @@ for participant in participants:
             results.append(
                 {
                     "Participant": participant,
-                    "Objective_Variable": behavior,
-                    "Wellness_Variable": wellbeing_variable,
+                    "Behavioral_Variable": behavior,
+                    "Wellbeing_Variable": wellbeing_variable,
                     "r": r,
                     "p": p,
                     "N": n,
-                    "Time_Lag": "t_to_t+1",
+                    "Included": (
+                        "Yes"
+                        if n >= MIN_N
+                        else "No"
+                    ),
                 }
             )
 
 
 # ============================================================
-# 10. SAVE RESULTS
+# 12. SAVE RESULTS
 # ============================================================
 
 results_df = pd.DataFrame(
@@ -420,46 +523,36 @@ results_df.to_csv(
 
 
 # ============================================================
-# 11. SUMMARY
+# 13. SUMMARY
 # ============================================================
 
-total_relationships = len(results_df)
+included = results_df[
+    results_df["Included"] == "Yes"
+]
 
-valid_relationships = int(
-    results_df["r"].notna().sum()
-)
-
-participants_analyzed = (
-    results_df["Participant"]
-    .nunique()
-)
-
-print("=" * 60)
-print("LAGGED ANALYSIS COMPLETED")
-print("=" * 60)
+print()
+print("=" * 70)
+print("SAME-DAY ANALYSIS COMPLETED")
+print("=" * 70)
 
 print(
     f"Participants analyzed: "
-    f"{participants_analyzed}"
+    f"{results_df['Participant'].nunique()}"
 )
 
 print(
     f"Total relationships tested: "
-    f"{total_relationships}"
+    f"{len(results_df)}"
 )
 
 print(
     f"Relationships with N >= {MIN_N}: "
-    f"{valid_relationships}"
+    f"{len(included)}"
 )
 
 print(
-    "Time lag: behavior at day t "
-    "-> wellbeing at day t+1"
+    f"Output saved to:\n"
+    f"{OUTPUT_FILE}"
 )
 
-print(
-    f"Output saved to:\n{OUTPUT_FILE}"
-)
-
-print("=" * 60)
+print("=" * 70)
