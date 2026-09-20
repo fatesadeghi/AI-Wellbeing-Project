@@ -5,14 +5,25 @@ from scipy.stats import pearsonr
 
 
 # ============================================================
-# PATHS
+# 1. PROJECT PATHS
 # ============================================================
+
+# Current project structure:
+#
+# AI-Wellbeing-Project/
+# ├── Code/
+# │   └── 04_seven_day_analysis.py
+# ├── data/
+# │   └── pmdata/
+# └── results/
+#
+# Therefore:
+# dirname(__file__)          -> Code
+# dirname(dirname(__file__)) -> AI-Wellbeing-Project
 
 BASE_DIR = os.path.dirname(
     os.path.dirname(
-        os.path.dirname(
-            os.path.abspath(__file__)
-        )
+        os.path.abspath(__file__)
     )
 )
 
@@ -20,6 +31,20 @@ DATA_DIR = os.path.join(
     BASE_DIR,
     "data",
     "pmdata"
+)
+
+BASELINE_FILE = os.path.join(
+    BASE_DIR,
+    "results",
+    "baseline",
+    "personalized_baselines.csv"
+)
+
+DEVIATION_FILE = os.path.join(
+    BASE_DIR,
+    "results",
+    "baseline",
+    "daily_personalized_deviations.csv"
 )
 
 OUTPUT_DIR = os.path.join(
@@ -33,20 +58,24 @@ OUTPUT_FILE = os.path.join(
     "seven_day_history_wellbeing_relationships.csv"
 )
 
+os.makedirs(
+    OUTPUT_DIR,
+    exist_ok=True
+)
+
 
 # ============================================================
-# SETTINGS
+# 2. SETTINGS
 # ============================================================
 
 MIN_N = 10
-MIN_HISTORY_DAYS = 7
-
 BASELINE_FRACTION = 0.50
 MIN_BASELINE_N = 7
+HISTORY_DAYS = 7
 
 
 # ============================================================
-# VARIABLES
+# 3. VARIABLES
 # ============================================================
 
 BEHAVIOR_VARIABLES = [
@@ -75,14 +104,31 @@ WELLBEING_VARIABLES = [
 
 
 # ============================================================
-# SAFE PEARSON
+# 4. SAFE PEARSON CORRELATION
 # ============================================================
 
 def safe_pearson(x, y):
+    """
+    Calculate Pearson correlation safely.
+
+    Missing, infinite, and constant values are handled
+    before calculating the correlation.
+
+    Returns:
+        r, p, n
+    """
 
     data = pd.concat(
-        [pd.Series(x), pd.Series(y)],
+        [
+            pd.Series(x, name="x"),
+            pd.Series(y, name="y"),
+        ],
         axis=1
+    )
+
+    data = data.replace(
+        [np.inf, -np.inf],
+        np.nan
     ).dropna()
 
     n = len(data)
@@ -90,13 +136,13 @@ def safe_pearson(x, y):
     if n < MIN_N:
         return np.nan, np.nan, n
 
-    x_values = data.iloc[:, 0].astype(float).values
-    y_values = data.iloc[:, 1].astype(float).values
+    x_values = data["x"].astype(float).to_numpy()
+    y_values = data["y"].astype(float).to_numpy()
 
-    if not np.all(np.isfinite(x_values)):
+    if not np.isfinite(x_values).all():
         return np.nan, np.nan, n
 
-    if not np.all(np.isfinite(y_values)):
+    if not np.isfinite(y_values).all():
         return np.nan, np.nan, n
 
     if np.std(x_values, ddof=1) == 0:
@@ -118,33 +164,148 @@ def safe_pearson(x, y):
 
 
 # ============================================================
-# LOAD PARTICIPANT FILES
+# 5. CHECK REQUIRED FILES
 # ============================================================
 
-print("Loading participant data...")
-
-if not os.path.isdir(DATA_DIR):
-    raise RuntimeError(
-        f"Data directory not found: {DATA_DIR}"
+if not os.path.exists(BASELINE_FILE):
+    raise FileNotFoundError(
+        f"Personalized baseline file not found:\n"
+        f"{BASELINE_FILE}"
     )
 
-participant_files = sorted([
-    f
-    for f in os.listdir(DATA_DIR)
-    if f.endswith("_daily_merged.csv")
-])
+if not os.path.exists(DEVIATION_FILE):
+    raise FileNotFoundError(
+        f"Daily personalized deviation file not found:\n"
+        f"{DEVIATION_FILE}"
+    )
+
+if not os.path.exists(DATA_DIR):
+    raise FileNotFoundError(
+        f"PMData directory not found:\n"
+        f"{DATA_DIR}"
+    )
+
+
+# ============================================================
+# 6. LOAD PERSONALIZED DEVIATIONS
+# ============================================================
+
+print("=" * 70)
+print("SEVEN-DAY HISTORY BEHAVIOR-WELLBEING ANALYSIS")
+print("=" * 70)
+
+print(
+    f"Project directory: {BASE_DIR}"
+)
+
+print(
+    f"Data directory: {DATA_DIR}"
+)
+
+print(
+    f"Baseline file: {BASELINE_FILE}"
+)
+
+print(
+    f"Deviation file: {DEVIATION_FILE}"
+)
+
+print(
+    f"Output file: {OUTPUT_FILE}"
+)
+
+print(
+    f"History window: previous {HISTORY_DAYS} days"
+)
+
+print()
+
+print(
+    "Loading personalized baseline data..."
+)
+
+baselines = pd.read_csv(
+    BASELINE_FILE
+)
+
+print(
+    "Loading personalized daily deviations..."
+)
+
+deviations = pd.read_csv(
+    DEVIATION_FILE
+)
+
+
+# ============================================================
+# 7. VALIDATE DEVIATION DATA
+# ============================================================
+
+required_deviation_columns = [
+    "Participant",
+    "Date",
+]
+
+missing_columns = [
+    column
+    for column in required_deviation_columns
+    if column not in deviations.columns
+]
+
+if missing_columns:
+    raise ValueError(
+        "Missing required columns in deviation file: "
+        + ", ".join(missing_columns)
+    )
+
+
+# ============================================================
+# 8. DATE PREPARATION
+# ============================================================
+
+deviations["Date"] = pd.to_datetime(
+    deviations["Date"],
+    errors="coerce"
+)
+
+deviations = deviations.dropna(
+    subset=["Date"]
+).copy()
+
+deviations = deviations.sort_values(
+    [
+        "Participant",
+        "Date",
+    ]
+).reset_index(drop=True)
+
+
+# ============================================================
+# 9. BUILD WELLBEING DATA
+# ============================================================
+
+print(
+    "Loading participant files..."
+)
+
+all_wellbeing = []
+
+participant_files = sorted(
+    [
+        filename
+        for filename in os.listdir(DATA_DIR)
+        if filename.endswith(
+            "_daily_merged.csv"
+        )
+    ]
+)
 
 if not participant_files:
     raise RuntimeError(
-        "No participant *_daily_merged.csv files found."
+        f"No participant files found in:\n"
+        f"{DATA_DIR}"
     )
 
-
-# ============================================================
-# ANALYSIS
-# ============================================================
-
-results = []
 
 for filename in participant_files:
 
@@ -158,22 +319,18 @@ for filename in participant_files:
         filename
     )
 
-    print(
-        f"Processing participant: {participant}"
+    df = pd.read_csv(
+        filepath
     )
 
-    df = pd.read_csv(filepath)
-
     if "Date" not in df.columns:
+
         print(
             f"Skipping {participant}: "
             "Date column not found."
         )
-        continue
 
-    # --------------------------------------------------------
-    # DATE PREPARATION
-    # --------------------------------------------------------
+        continue
 
     df["Date"] = pd.to_datetime(
         df["Date"],
@@ -191,16 +348,16 @@ for filename in participant_files:
     df = df.drop_duplicates(
         subset=["Date"],
         keep="first"
-    ).reset_index(drop=True)
+    )
+
+    # --------------------------------------------------------
+    # Same chronological split as baseline code
+    # --------------------------------------------------------
 
     n_total = len(df)
 
     if n_total < 2:
         continue
-
-    # --------------------------------------------------------
-    # SAME 50/50 SPLIT AS BASELINE CODE
-    # --------------------------------------------------------
 
     baseline_n = int(
         np.floor(
@@ -211,94 +368,257 @@ for filename in participant_files:
     if baseline_n < MIN_BASELINE_N:
         continue
 
+    # Second half = analysis period
     analysis_df = df.iloc[
         baseline_n:
     ].copy()
 
-    if analysis_df.empty:
+    available_wellbeing = [
+        variable
+        for variable in WELLBEING_VARIABLES
+        if variable in analysis_df.columns
+    ]
+
+    if not available_wellbeing:
         continue
 
+    selected = analysis_df[
+        ["Date"] + available_wellbeing
+    ].copy()
+
+    selected.insert(
+        0,
+        "Participant",
+        participant
+    )
+
+    all_wellbeing.append(
+        selected
+    )
+
+
+if not all_wellbeing:
+    raise RuntimeError(
+        "No wellbeing data could be loaded "
+        "for the analysis period."
+    )
+
+
+wellbeing = pd.concat(
+    all_wellbeing,
+    ignore_index=True
+)
+
+wellbeing["Date"] = pd.to_datetime(
+    wellbeing["Date"],
+    errors="coerce"
+)
+
+wellbeing = wellbeing.dropna(
+    subset=["Date"]
+).copy()
+
+
+# ============================================================
+# 10. CREATE PREVIOUS 7-DAY BEHAVIOR HISTORY
+# ============================================================
+
+print(
+    "Calculating previous 7-day behavioral averages..."
+)
+
+history_records = []
+
+for participant in sorted(
+    deviations["Participant"]
+    .dropna()
+    .unique()
+):
+
+    participant_data = deviations[
+        deviations["Participant"] == participant
+    ].copy()
+
+    participant_data = participant_data.sort_values(
+        "Date"
+    ).reset_index(drop=True)
+
     # --------------------------------------------------------
-    # CREATE PREVIOUS 7-DAY HISTORY
+    # Use raw behavioral values from the deviation file.
+    # The history excludes the current day.
     # --------------------------------------------------------
 
     for behavior in BEHAVIOR_VARIABLES:
 
-        if behavior not in analysis_df.columns:
+        value_column = f"{behavior}_Value"
+
+        if value_column not in participant_data.columns:
             continue
 
-        analysis_df[
-            f"{behavior}_7day_history"
+        participant_data[
+            value_column
+        ] = pd.to_numeric(
+            participant_data[value_column],
+            errors="coerce"
+        )
+
+        participant_data[
+            f"{behavior}_7day_mean"
         ] = (
-            analysis_df[behavior]
+            participant_data[value_column]
             .shift(1)
             .rolling(
-                window=MIN_HISTORY_DAYS,
-                min_periods=MIN_HISTORY_DAYS
+                window=HISTORY_DAYS,
+                min_periods=HISTORY_DAYS
             )
             .mean()
         )
 
-    # --------------------------------------------------------
-    # PARTICIPANT-LEVEL CORRELATIONS
-    # --------------------------------------------------------
+    history_records.append(
+        participant_data[
+            [
+                "Participant",
+                "Date",
+            ]
+            + [
+                f"{behavior}_7day_mean"
+                for behavior in BEHAVIOR_VARIABLES
+                if f"{behavior}_7day_mean"
+                in participant_data.columns
+            ]
+        ]
+    )
+
+
+if not history_records:
+    raise RuntimeError(
+        "No behavioral history could be created."
+    )
+
+
+history = pd.concat(
+    history_records,
+    ignore_index=True
+)
+
+history["Date"] = pd.to_datetime(
+    history["Date"],
+    errors="coerce"
+)
+
+history = history.dropna(
+    subset=["Date"]
+).copy()
+
+
+# ============================================================
+# 11. MERGE 7-DAY HISTORY WITH SAME-DAY WELLBEING
+# ============================================================
+
+print(
+    "Merging previous 7-day behavior history "
+    "with same-day wellbeing..."
+)
+
+merged = pd.merge(
+    history,
+    wellbeing,
+    on=[
+        "Participant",
+        "Date",
+    ],
+    how="inner"
+)
+
+if merged.empty:
+    raise RuntimeError(
+        "The merge produced no matching "
+        "participant-date rows."
+    )
+
+
+merged = merged.sort_values(
+    [
+        "Participant",
+        "Date",
+    ]
+).reset_index(drop=True)
+
+
+# ============================================================
+# 12. PARTICIPANT-LEVEL 7-DAY ANALYSIS
+# ============================================================
+
+print(
+    "Calculating participant-level "
+    "seven-day correlations..."
+)
+
+results = []
+
+participants = sorted(
+    merged["Participant"]
+    .dropna()
+    .unique()
+)
+
+
+for participant in participants:
+
+    participant_data = merged[
+        merged["Participant"] == participant
+    ].copy()
 
     for behavior in BEHAVIOR_VARIABLES:
 
         history_column = (
-            f"{behavior}_7day_history"
+            f"{behavior}_7day_mean"
         )
 
-        if history_column not in analysis_df.columns:
+        if history_column not in participant_data.columns:
             continue
 
-        for wellbeing in WELLBEING_VARIABLES:
+        for wellbeing_variable in WELLBEING_VARIABLES:
 
-            if wellbeing not in analysis_df.columns:
+            if wellbeing_variable not in participant_data.columns:
                 continue
 
+            x = participant_data[
+                history_column
+            ]
+
+            y = participant_data[
+                wellbeing_variable
+            ]
+
             r, p, n = safe_pearson(
-                analysis_df[history_column],
-                analysis_df[wellbeing]
+                x,
+                y
             )
 
-            results.append({
-                "Participant": participant,
-                "Behavioral_Variable": behavior,
-                "Wellbeing_Variable": wellbeing,
-                "Time_Window": "previous_7_days",
-                "r": r,
-                "p": p,
-                "N": n,
-                "Included": (
-                    "Yes"
-                    if n >= MIN_N
-                    else "No"
-                )
-            })
+            results.append(
+                {
+                    "Participant": participant,
+                    "Behavioral_Variable": behavior,
+                    "Wellbeing_Variable": wellbeing_variable,
+                    "r": r,
+                    "p": p,
+                    "N": n,
+                    "Included": (
+                        "Yes"
+                        if n >= MIN_N
+                        else "No"
+                    ),
+                }
+            )
 
 
 # ============================================================
-# RESULTS DATAFRAME
+# 13. SAVE RESULTS
 # ============================================================
 
 results_df = pd.DataFrame(
     results
-)
-
-if results_df.empty:
-    raise RuntimeError(
-        "No relationships could be calculated."
-    )
-
-
-# ============================================================
-# SAVE RESULTS
-# ============================================================
-
-os.makedirs(
-    OUTPUT_DIR,
-    exist_ok=True
 )
 
 results_df.to_csv(
@@ -308,7 +628,7 @@ results_df.to_csv(
 
 
 # ============================================================
-# SUMMARY
+# 14. SUMMARY
 # ============================================================
 
 included = results_df[
@@ -316,9 +636,9 @@ included = results_df[
 ]
 
 print()
-print("=" * 60)
-print("7-DAY HISTORY ANALYSIS COMPLETED")
-print("=" * 60)
+print("=" * 70)
+print("SEVEN-DAY ANALYSIS COMPLETED")
+print("=" * 70)
 
 print(
     f"Participants analyzed: "
@@ -336,7 +656,13 @@ print(
 )
 
 print(
-    f"Output saved to:\n{OUTPUT_FILE}"
+    "History definition: "
+    "previous 7 days -> same-day wellbeing"
 )
 
-print("=" * 60)
+print(
+    f"Output saved to:\n"
+    f"{OUTPUT_FILE}"
+)
+
+print("=" * 70)
