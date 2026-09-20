@@ -8,18 +8,15 @@ import numpy as np
 # ============================================================
 
 # This file is located at:
-# AI-Wellbeing-Project/final/Code/01_build_baseline.py
+# AI-Wellbeing-Project/Code/01_build_baseline.py
 #
 # Therefore:
-# dirname(__file__)              -> final/Code
-# dirname(dirname(__file__))     -> final
-# dirname(dirname(dirname(...))) -> AI-Wellbeing-Project
+# dirname(__file__)          -> Code
+# dirname(dirname(__file__)) -> AI-Wellbeing-Project
 
 BASE_DIR = os.path.dirname(
     os.path.dirname(
-        os.path.dirname(
-            os.path.abspath(__file__)
-        )
+        os.path.abspath(__file__)
     )
 )
 
@@ -117,9 +114,8 @@ if not os.path.exists(DATA_DIR):
         "AI-Wellbeing-Project/\n"
         "├── data/\n"
         "│   └── pmdata/\n"
-        "└── final/\n"
-        "    └── Code/\n"
-        "        └── 01_build_baseline.py"
+        "└── Code/\n"
+        "    └── 01_build_baseline.py"
     )
 
 
