@@ -110,22 +110,45 @@ def longest_missing_streak(series):
 def first_10_days_missing(df, variable):
     """
     Check whether the variable is completely missing
-    during the first 10 consecutive days.
+    during the first 10 consecutive calendar days.
+
+    Missing calendar dates are explicitly represented
+    as missing observations.
     """
 
-    first_days = (
-        df[
-            ["Date", variable]
-        ]
-        .sort_values("Date")
-        .head(FIRST_10_DAYS)
+    check = df[
+        ["Date", variable]
+    ].copy()
+
+    check = check.sort_values(
+        "Date"
     )
 
-    if len(first_days) < FIRST_10_DAYS:
+    if check.empty:
         return False
 
+    # Start from the participant's first recorded date
+    start_date = check["Date"].min()
+
+    # Define the first 10 consecutive calendar days
+    first_10_dates = pd.date_range(
+        start=start_date,
+        periods=FIRST_10_DAYS,
+        freq="D"
+    )
+
+    check = check.set_index(
+        "Date"
+    )
+
+    # Reindex so missing calendar dates are explicitly represented
+    first_10 = check.reindex(
+        first_10_dates
+    )
+
+    # Variable must be missing on all first 10 calendar days
     return bool(
-        first_days[variable].isna().all()
+        first_10[variable].isna().all()
     )
 
 
@@ -182,6 +205,10 @@ for filename in participant_files:
     print("\n" + "-" * 70)
     print(f"Processing: {participant}")
 
+    # --------------------------------------------------------
+    # Date
+    # --------------------------------------------------------
+
     if "Date" not in df.columns:
 
         print(
@@ -196,13 +223,20 @@ for filename in participant_files:
     )
 
     df = (
-        df.dropna(subset=["Date"])
-        .sort_values("Date")
+        df
+        .dropna(
+            subset=["Date"]
+        )
+        .sort_values(
+            "Date"
+        )
         .drop_duplicates(
             subset="Date",
             keep="first"
         )
-        .reset_index(drop=True)
+        .reset_index(
+            drop=True
+        )
     )
 
     total_rows = len(df)
@@ -235,7 +269,15 @@ for filename in participant_files:
                 "First_10_Days_All_Missing": False
             })
 
+            print(
+                f"{variable}: MISSING COLUMN"
+            )
+
             continue
+
+        # ----------------------------------------------------
+        # Missingness statistics
+        # ----------------------------------------------------
 
         missing_count = int(
             df[variable].isna().sum()
@@ -254,6 +296,10 @@ for filename in participant_files:
         is_sleep = (
             variable in SLEEP_VARIABLES
         )
+
+        # ----------------------------------------------------
+        # First 10 calendar days
+        # ----------------------------------------------------
 
         first10_missing = first_10_days_missing(
             df,
@@ -291,8 +337,9 @@ for filename in participant_files:
 
             elif longest_streak >= FIRST_10_DAYS:
 
-                # Missing streak later in the record does
-                # not trigger exclusion, but is reported.
+                # A long missing streak occurring later in
+                # the record does not trigger exclusion.
+                # It is reported only.
 
                 status = (
                     "Available_With_Long_Missing_Streak"
@@ -301,6 +348,10 @@ for filename in participant_files:
             else:
 
                 status = "Available_With_Missing"
+
+        # ----------------------------------------------------
+        # Save row
+        # ----------------------------------------------------
 
         availability_rows.append({
             "Participant": participant,
@@ -358,7 +409,9 @@ status_summary = (
         "Status"
     ]
     .value_counts()
-    .rename_axis("Status")
+    .rename_axis(
+        "Status"
+    )
     .reset_index(
         name="Count"
     )
@@ -437,9 +490,11 @@ print("\nOutput files:")
 print(
     f"  {DETAILED_FILE}"
 )
+
 print(
     f"  {SUMMARY_FILE}"
 )
+
 print(
     f"  {EXCLUDED_FILE}"
 )
