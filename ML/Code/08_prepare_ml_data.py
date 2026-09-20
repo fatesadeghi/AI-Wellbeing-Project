@@ -7,6 +7,9 @@ import numpy as np
 # 1. PATHS
 # ============================================================
 
+# Current file:
+# AI-Wellbeing-Project/ML/Code/08_prepare_ml_data.py
+
 BASE_DIR = os.path.dirname(
     os.path.dirname(
         os.path.dirname(
@@ -21,9 +24,13 @@ DATA_DIR = os.path.join(
     "pmdata"
 )
 
-OUTPUT_DIR = os.path.join(
+RESULTS_DIR = os.path.join(
     BASE_DIR,
-    "results",
+    "results"
+)
+
+OUTPUT_DIR = os.path.join(
+    RESULTS_DIR,
     "ml"
 )
 
@@ -34,10 +41,10 @@ os.makedirs(
 
 
 # ============================================================
-# 2. VARIABLES
+# 2. SETTINGS
 # ============================================================
 
-BEHAVIORAL_VARIABLES = [
+BEHAVIOR_VARS = [
     "Steps",
     "Exercise_Count",
     "Exercise_Duration",
@@ -53,7 +60,7 @@ BEHAVIORAL_VARIABLES = [
     "Sleep_Score"
 ]
 
-WELLBEING_VARIABLES = [
+WELLBEING_VARS = [
     "fatigue",
     "mood",
     "readiness",
@@ -61,87 +68,105 @@ WELLBEING_VARIABLES = [
     "stress"
 ]
 
-MIN_BASELINE_N = 7
+FIRST_10_DAYS = 10
 
 
 # ============================================================
-# 3. HELPER FUNCTIONS
+# 3. FIRST 10 DAYS MISSINGNESS RULE
 # ============================================================
 
-def safe_zscore(value, mean, std):
-    if pd.isna(value) or pd.isna(mean) or pd.isna(std):
-        return np.nan
+def first_10_days_missing(df, variable):
+    """
+    Check whether a behavioral variable is completely
+    missing during the first 10 consecutive days.
 
-    if std == 0:
-        return np.nan
+    If all first 10 days are missing, the variable is
+    excluded for that participant.
 
-    return (value - mean) / std
+    Sleep variables are exempt from this rule.
+    """
 
+    check = df[
+        ["Date", variable]
+    ].copy()
 
-def safe_mean(series):
-    series = pd.to_numeric(series, errors="coerce")
-    if series.notna().sum() == 0:
-        return np.nan
-    return series.mean()
+    check = check.sort_values(
+        "Date"
+    ).head(
+        FIRST_10_DAYS
+    )
 
+    if len(check) < FIRST_10_DAYS:
+        return False
 
-def safe_std(series):
-    series = pd.to_numeric(series, errors="coerce")
-    if series.notna().sum() < 2:
-        return np.nan
-    return series.std()
+    return check[variable].isna().all()
 
 
 # ============================================================
-# 4. FIND PARTICIPANTS
+# 4. FIND PARTICIPANT FILES
 # ============================================================
 
 participant_files = sorted(
     [
-        f
-        for f in os.listdir(DATA_DIR)
-        if f.startswith("p")
-        and f.endswith("_daily_merged.csv")
+        filename
+        for filename in os.listdir(DATA_DIR)
+        if filename.endswith(".csv")
+        and filename.startswith("p")
     ]
 )
+
+if not participant_files:
+    raise FileNotFoundError(
+        f"No participant CSV files found in:\n{DATA_DIR}"
+    )
+
 
 print("=" * 70)
 print("ML DATA PREPARATION")
 print("=" * 70)
-print(f"Participants found: {len(participant_files)}")
-print()
+
+print(
+    f"Participant files found: {len(participant_files)}"
+)
 
 
 # ============================================================
-# 5. PROCESS EACH PARTICIPANT
+# 5. PROCESS PARTICIPANTS
 # ============================================================
 
-all_participant_data = []
+all_ml_data = []
+
+feature_status_rows = []
+
 
 for filename in participant_files:
 
-    participant = filename.replace(
-        "_daily_merged.csv",
-        ""
-    )
+    participant = os.path.splitext(
+        filename
+    )[0]
 
-    filepath = os.path.join(
+    file_path = os.path.join(
         DATA_DIR,
         filename
     )
 
-    print(f"Processing {participant}...")
+    print("\n" + "-" * 70)
+    print(f"Processing: {participant}")
 
-    df = pd.read_csv(filepath)
+    df = pd.read_csv(
+        file_path
+    )
 
     # --------------------------------------------------------
     # Date
     # --------------------------------------------------------
 
     if "Date" not in df.columns:
+
         print(
-            f"WARNING: {participant} has no Date column. Skipping."
+            f"WARNING: Date column missing for {participant}"
         )
+
         continue
 
     df["Date"] = pd.to_datetime(
@@ -151,460 +176,294 @@ for filename in participant_files:
 
     df = df.dropna(
         subset=["Date"]
-    ).sort_values(
+    )
+
+    df = df.sort_values(
         "Date"
-    ).reset_index(
+    )
+
+    df = df.drop_duplicates(
+        subset="Date",
+        keep="first"
+    )
+
+    df = df.reset_index(
         drop=True
     )
 
-    if len(df) == 0:
-        print(
-            f"WARNING: {participant} contains no valid dates. Skipping."
+    # --------------------------------------------------------
+    # Determine active behavioral variables
+    # --------------------------------------------------------
+
+    active_behavior_vars = []
+
+    for variable in BEHAVIOR_VARS:
+
+        # ----------------------------------------------------
+        # Missing column
+        # ----------------------------------------------------
+
+        if variable not in df.columns:
+
+            feature_status_rows.append({
+                "Participant": participant,
+                "Variable": variable,
+                "Status": "Missing_Column",
+                "First_10_Days_All_Missing": False,
+                "Total_Missing": np.nan,
+                "Total_Rows": len(df),
+                "Missing_Percent": np.nan
+            })
+
+            print(
+                f"  {variable}: MISSING COLUMN"
+            )
+
+            continue
+
+        # ----------------------------------------------------
+        # Sleep variables are exempt from first-10 rule
+        # ----------------------------------------------------
+
+        is_sleep_variable = (
+            variable.startswith("Sleep_")
+            or variable == "Deep_Sleep_Minutes"
         )
-        continue
+
+        total_missing = int(
+            df[variable].isna().sum()
+        )
+
+        total_rows = len(df)
+
+        missing_percent = (
+            total_missing / total_rows * 100
+            if total_rows > 0
+            else np.nan
+        )
+
+        if is_sleep_variable:
+
+            first10_missing = False
+
+            status = (
+                "Available_Sleep_Exempt"
+            )
+
+            active_behavior_vars.append(
+                variable
+            )
+
+        else:
+
+            first10_missing = first_10_days_missing(
+                df,
+                variable
+            )
+
+            if first10_missing:
+
+                status = (
+                    "Excluded_First_10_Days_Missing"
+                )
+
+            else:
+
+                status = "Available"
+
+                active_behavior_vars.append(
+                    variable
+                )
+
+        # ----------------------------------------------------
+        # Save status
+        # ----------------------------------------------------
+
+        feature_status_rows.append({
+            "Participant": participant,
+            "Variable": variable,
+            "Status": status,
+            "First_10_Days_All_Missing": first10_missing,
+            "Total_Missing": total_missing,
+            "Total_Rows": total_rows,
+            "Missing_Percent": missing_percent
+        })
+
+        print(
+            f"  {variable}: {status}"
+        )
 
     # --------------------------------------------------------
-    # Participant ID
+    # Select wellbeing variables
     # --------------------------------------------------------
 
-    df["Participant"] = participant
-
-    # --------------------------------------------------------
-    # Check behavioral variables
-    # --------------------------------------------------------
-
-    missing_behavioral = [
-        v
-        for v in BEHAVIORAL_VARIABLES
-        if v not in df.columns
+    available_wellbeing_vars = [
+        variable
+        for variable in WELLBEING_VARS
+        if variable in df.columns
     ]
 
-    if missing_behavioral:
-        print(
-            f"WARNING: Missing columns for {participant}: "
-            f"{missing_behavioral}"
-        )
-
-        # Create missing columns as NaN.
-        # This keeps the feature structure identical
-        # across participants.
-        for variable in missing_behavioral:
-            df[variable] = np.nan
-
-    # --------------------------------------------------------
-    # Check wellbeing variables
-    # --------------------------------------------------------
-
     missing_wellbeing = [
-        v
-        for v in WELLBEING_VARIABLES
-        if v not in df.columns
+        variable
+        for variable in WELLBEING_VARS
+        if variable not in df.columns
     ]
 
     if missing_wellbeing:
+
         print(
-            f"WARNING: Missing wellbeing columns for "
-            f"{participant}: {missing_wellbeing}"
+            f"  WARNING: Missing wellbeing columns: "
+            f"{missing_wellbeing}"
         )
-
-        for variable in missing_wellbeing:
-            df[variable] = np.nan
 
     # --------------------------------------------------------
-    # Convert behavioral and wellbeing variables to numeric
+    # Build participant ML dataframe
     # --------------------------------------------------------
 
-    for variable in BEHAVIORAL_VARIABLES:
-        df[variable] = pd.to_numeric(
-            df[variable],
-            errors="coerce"
-        )
+    selected_columns = [
+        "Date"
+    ]
 
-    for variable in WELLBEING_VARIABLES:
-        df[variable] = pd.to_numeric(
-            df[variable],
-            errors="coerce"
-        )
-
-    # ========================================================
-    # 6. PERSONALIZED BASELINE
-    # ========================================================
-
-    n_total = len(df)
-
-    baseline_n = int(
-        np.floor(n_total * 0.50)
+    selected_columns.extend(
+        active_behavior_vars
     )
 
-    baseline_n = max(
-        baseline_n,
-        MIN_BASELINE_N
+    selected_columns.extend(
+        available_wellbeing_vars
     )
 
-    baseline_n = min(
-        baseline_n,
-        n_total
-    )
-
-    baseline = df.iloc[
-        :baseline_n
+    ml_df = df[
+        selected_columns
     ].copy()
 
-    print(
-        f"  Total observations: {n_total}"
-    )
-
-    print(
-        f"  Baseline observations: {baseline_n}"
+    ml_df.insert(
+        0,
+        "Participant",
+        participant
     )
 
     # --------------------------------------------------------
-    # Baseline statistics
+    # Create next-day wellbeing change targets
+    #
+    # Target at day t:
+    #
+    # Wellbeing(t+1) - Wellbeing(t)
+    #
+    # This is the prediction target for ML.
     # --------------------------------------------------------
 
-    baseline_stats = {}
+    for variable in WELLBEING_VARS:
 
-    for variable in BEHAVIORAL_VARIABLES:
+        if variable not in ml_df.columns:
+            continue
 
-        series = baseline[variable]
-
-        baseline_stats[variable] = {
-            "median": series.median(),
-            "mean": safe_mean(series),
-            "std": safe_std(series)
-        }
-
-    # ========================================================
-    # 7. BEHAVIORAL ML FEATURES
-    # ========================================================
-
-    for variable in BEHAVIORAL_VARIABLES:
-
-        median = baseline_stats[variable]["median"]
-        mean = baseline_stats[variable]["mean"]
-        std = baseline_stats[variable]["std"]
-
-        # ----------------------------------------------------
-        # Raw value
-        # ----------------------------------------------------
-
-        df[f"{variable}_raw"] = df[variable]
-
-        # ----------------------------------------------------
-        # Deviation from personalized baseline median
-        # ----------------------------------------------------
-
-        df[f"{variable}_deviation"] = (
-            df[variable] - median
+        ml_df[
+            f"NextDayChange_{variable}"
+        ] = (
+            ml_df[variable].shift(-1)
+            -
+            ml_df[variable]
         )
 
-        # ----------------------------------------------------
-        # Personalized Z-score
-        # ----------------------------------------------------
-
-        df[f"{variable}_z"] = (
-            df[variable].apply(
-                lambda x: safe_zscore(
-                    x,
-                    mean,
-                    std
-                )
-            )
-        )
-
-        # ----------------------------------------------------
-        # Absolute Z-score
-        # ----------------------------------------------------
-
-        df[f"{variable}_abs_z"] = (
-            df[f"{variable}_z"].abs()
-        )
-
-        # ----------------------------------------------------
-        # Previous 7-day mean
-        #
-        # shift(1) ensures that the current day's
-        # information is NOT included.
-        # ----------------------------------------------------
-
-        df[f"{variable}_7d_mean"] = (
-            df[variable]
-            .shift(1)
-            .rolling(
-                window=7,
-                min_periods=1
-            )
-            .mean()
-        )
-
-        # ----------------------------------------------------
-        # Previous 7-day standard deviation
-        # ----------------------------------------------------
-
-        df[f"{variable}_7d_std"] = (
-            df[variable]
-            .shift(1)
-            .rolling(
-                window=7,
-                min_periods=2
-            )
-            .std()
-        )
-
-        # ----------------------------------------------------
-        # One-day change
-        # ----------------------------------------------------
-
-        df[f"{variable}_1d_change"] = (
-            df[variable].diff(1)
-        )
-
-    # ========================================================
-    # 8. WELLBEING TARGET FEATURES
-    # ========================================================
-
-    for variable in WELLBEING_VARIABLES:
-
-        # ----------------------------------------------------
-        # Current wellbeing value
-        # ----------------------------------------------------
-
-        df[f"{variable}_raw"] = df[variable]
-
-        # ----------------------------------------------------
-        # Next-day wellbeing
-        #
-        # Used later for predictive/lagged modelling.
-        # ----------------------------------------------------
-
-        df[f"{variable}_next_day"] = (
-            df[variable].shift(-1)
-        )
-
-        # ----------------------------------------------------
-        # Change in wellbeing from current day to next day
-        # ----------------------------------------------------
-
-        df[f"{variable}_next_day_change"] = (
-            df[variable].shift(-1)
-            - df[variable]
-        )
-
-    # ========================================================
-    # 9. STORE PARTICIPANT DATA
-    # ========================================================
-
-    all_participant_data.append(
-        df
+    all_ml_data.append(
+        ml_df
     )
 
     print(
-        f"  Features created: "
-        f"{len(df.columns)} columns"
+        f"  Active behavioral variables: "
+        f"{len(active_behavior_vars)}/{len(BEHAVIOR_VARS)}"
     )
 
-    print()
+    print(
+        f"  Wellbeing variables available: "
+        f"{len(available_wellbeing_vars)}/{len(WELLBEING_VARS)}"
+    )
 
 
 # ============================================================
-# 10. COMBINE PARTICIPANTS
+# 6. CHECK PROCESSING
 # ============================================================
 
-print("=" * 70)
-print("COMBINE PARTICIPANTS")
-print("=" * 70)
-
-if len(all_participant_data) == 0:
+if not all_ml_data:
 
     raise RuntimeError(
-        "No participant datasets were successfully processed."
+        "No participant data could be prepared for ML."
     )
 
-ml_dataset = pd.concat(
-    all_participant_data,
-    ignore_index=True,
-    sort=False
+
+# ============================================================
+# 7. COMBINE ALL PARTICIPANTS
+# ============================================================
+
+ml_data = pd.concat(
+    all_ml_data,
+    ignore_index=True
 )
 
-print(
-    f"Combined rows: {len(ml_dataset)}"
-)
-
-print(
-    f"Combined columns: {len(ml_dataset.columns)}"
-)
-
-print(
-    f"Participants in final dataset: "
-    f"{ml_dataset['Participant'].nunique()}"
+feature_status = pd.DataFrame(
+    feature_status_rows
 )
 
 
 # ============================================================
-# 11. ORDER COLUMNS
+# 8. SAVE PREPARED ML DATA
 # ============================================================
 
-first_columns = [
-    "Participant",
-    "Date"
-]
-
-remaining_columns = [
-    c
-    for c in ml_dataset.columns
-    if c not in first_columns
-]
-
-ml_dataset = ml_dataset[
-    first_columns + remaining_columns
-]
-
-
-# ============================================================
-# 12. SAVE ML DATASET
-# ============================================================
-
-output_file = os.path.join(
+ML_DATA_FILE = os.path.join(
     OUTPUT_DIR,
-    "ml_ready_dataset.csv"
+    "ml_prepared_data.csv"
 )
 
-ml_dataset.to_csv(
-    output_file,
+FEATURE_STATUS_FILE = os.path.join(
+    OUTPUT_DIR,
+    "ml_feature_status.csv"
+)
+
+ml_data.to_csv(
+    ML_DATA_FILE,
+    index=False
+)
+
+feature_status.to_csv(
+    FEATURE_STATUS_FILE,
     index=False
 )
 
 
 # ============================================================
-# 13. SAVE FEATURE LIST
+# 9. SUMMARY
 # ============================================================
 
-feature_rows = []
-
-for variable in BEHAVIORAL_VARIABLES:
-
-    feature_rows.extend(
-        [
-            {
-                "Behavioral_Variable": variable,
-                "Feature": f"{variable}_raw",
-                "Feature_Type": "Raw value"
-            },
-            {
-                "Behavioral_Variable": variable,
-                "Feature": f"{variable}_deviation",
-                "Feature_Type": "Deviation from baseline median"
-            },
-            {
-                "Behavioral_Variable": variable,
-                "Feature": f"{variable}_z",
-                "Feature_Type": "Personalized Z-score"
-            },
-            {
-                "Behavioral_Variable": variable,
-                "Feature": f"{variable}_abs_z",
-                "Feature_Type": "Absolute personalized Z-score"
-            },
-            {
-                "Behavioral_Variable": variable,
-                "Feature": f"{variable}_7d_mean",
-                "Feature_Type": "Previous 7-day mean"
-            },
-            {
-                "Behavioral_Variable": variable,
-                "Feature": f"{variable}_7d_std",
-                "Feature_Type": "Previous 7-day standard deviation"
-            },
-            {
-                "Behavioral_Variable": variable,
-                "Feature": f"{variable}_1d_change",
-                "Feature_Type": "One-day change"
-            }
-        ]
-    )
-
-feature_list = pd.DataFrame(
-    feature_rows
-)
-
-feature_file = os.path.join(
-    OUTPUT_DIR,
-    "ml_feature_list.csv"
-)
-
-feature_list.to_csv(
-    feature_file,
-    index=False
-)
-
-
-# ============================================================
-# 14. SAVE PARTICIPANT SUMMARY
-# ============================================================
-
-participant_summary = (
-    ml_dataset
-    .groupby("Participant")
-    .agg(
-        Observations=("Date", "count")
-    )
-    .reset_index()
-)
-
-participant_file = os.path.join(
-    OUTPUT_DIR,
-    "ml_participant_summary.csv"
-)
-
-participant_summary.to_csv(
-    participant_file,
-    index=False
-)
-
-
-# ============================================================
-# 15. FINAL CHECK
-# ============================================================
-
-print()
-print("=" * 70)
-print("SAVE")
+print("\n" + "=" * 70)
+print("ML DATA PREPARATION COMPLETE")
 print("=" * 70)
 
 print(
-    f"Saved: {output_file}"
+    f"Rows prepared: {len(ml_data)}"
 )
 
 print(
-    f"Saved: {feature_file}"
+    f"Participants: "
+    f"{ml_data['Participant'].nunique()}"
 )
 
 print(
-    f"Saved: {participant_file}"
-)
-
-print()
-print(
-    "Behavioral variables:",
-    len(BEHAVIORAL_VARIABLES)
+    f"Behavioral variables: "
+    f"{len(BEHAVIOR_VARS)}"
 )
 
 print(
-    "Well-being variables:",
-    len(WELLBEING_VARIABLES)
+    f"Wellbeing variables: "
+    f"{len(WELLBEING_VARS)}"
+)
+
+print("\nOutput files:")
+print(
+    f"  {ML_DATA_FILE}"
 )
 
 print(
-    "Participants:",
-    ml_dataset["Participant"].nunique()
+    f"  {FEATURE_STATUS_FILE}"
 )
 
-print(
-    "Rows:",
-    len(ml_dataset)
-)
-
-print()
-print("=" * 70)
-print("DONE")
-print("=" * 70)
+print("\n" + "=" * 70)
