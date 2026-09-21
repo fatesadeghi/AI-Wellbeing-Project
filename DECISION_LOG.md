@@ -8,7 +8,7 @@
 
 > Can AI detect changes in a person's well-being by learning their daily habits and spotting unusual behavior?
 
-This decision log documents the main methodological choices made during the project, why they were made, and how they were implemented.
+This decision log documents the main methodological decisions made throughout the project, the rationale behind those decisions, and how they were implemented.
 
 The purpose of this document is to support:
 
@@ -78,7 +78,33 @@ All 13 variables were retained as candidate behavioral predictors.
 
 ---
 
-# 3. Personalized Baseline
+# 3. Well-Being Variables
+
+### Decision
+
+Use five self-reported well-being-related variables as outcome measures.
+
+### Variables
+
+1. `fatigue`
+2. `mood`
+3. `readiness`
+4. `sleep_quality`
+5. `stress`
+
+### Reason
+
+These variables represent different reported dimensions related to daily well-being.
+
+Using multiple indicators allows the analysis to examine whether behavioral changes are associated with different aspects of self-reported well-being.
+
+### Outcome
+
+The five variables were retained for the statistical and ML analyses.
+
+---
+
+# 4. Personalized Baseline
 
 ### Decision
 
@@ -94,9 +120,9 @@ Therefore, a population-wide behavioral threshold was not considered sufficient 
 
 ### Implementation
 
-For each participant, the available observations were ordered chronologically.
+For each participant, available observations were ordered chronologically.
 
-The first half of the participant's available observations was used to establish their personal baseline.
+The first half of the participant's observations was used to establish their personal baseline.
 
 Baseline statistics included:
 
@@ -111,7 +137,7 @@ Each participant received an individual behavioral baseline.
 
 ---
 
-# 4. Chronological 50/50 Baseline Split
+# 5. Chronological 50/50 Baseline Split
 
 ### Decision
 
@@ -146,7 +172,7 @@ The baseline was established before the main deviation analysis.
 
 ---
 
-# 5. Personalized Deviation Measures
+# 6. Personalized Deviation Measures
 
 ### Decision
 
@@ -187,7 +213,7 @@ The method does not determine the health meaning of the deviation by itself.
 
 ---
 
-# 6. Primary Behavioral Deviation Threshold
+# 7. Primary Behavioral Deviation Threshold
 
 ### Decision
 
@@ -212,7 +238,7 @@ The **|Z| ≥ 2** threshold was used as the primary deviation criterion.
 
 ---
 
-# 7. Sensitivity Analysis with |Z| ≥ 1
+# 8. Sensitivity Analysis with |Z| ≥ 1
 
 ### Decision
 
@@ -234,7 +260,7 @@ It is also not considered a fourth primary temporal analysis.
 
 ---
 
-# 8. Handling Incomplete and Unequal Data Availability
+# 9. Handling Incomplete and Unequal Data Availability
 
 ### Decision
 
@@ -276,7 +302,7 @@ The feature-availability analysis identified:
 
 ---
 
-# 9. Minimum Sample Size N ≥ 10
+# 10. Minimum Sample Size N ≥ 10
 
 ### Decision
 
@@ -304,7 +330,7 @@ Relationships with fewer than 10 usable paired observations were not treated as 
 
 ---
 
-# 10. Pearson Correlation
+# 11. Pearson Correlation
 
 ### Decision
 
@@ -336,11 +362,11 @@ Correlation measures association and **does not establish causation**.
 
 ---
 
-# 11. Initial Anomaly-Only Analysis
+# 12. Initial Anomaly-Based Analysis
 
 ### Decision
 
-Begin the deviation-based analysis by examining unusual behavioral observations.
+Begin the deviation-based analysis by examining unusual behavioral observations relative to each participant's personal baseline.
 
 ### Reason
 
@@ -354,7 +380,7 @@ Personalized deviations were generated from the baseline and used as the basis f
 
 ---
 
-# 12. Full-Period Personalized Deviation Analysis
+# 13. Full-Period Personalized Deviation Analysis
 
 ### Decision
 
@@ -372,7 +398,7 @@ Daily personalized deviations were retained throughout the analysis period.
 
 ---
 
-# 13. Same-Day Analysis
+# 14. Same-Day Analysis
 
 ### Decision
 
@@ -401,7 +427,7 @@ The final same-day analysis contained:
 
 ---
 
-# 14. Benjamini–Hochberg FDR Correction
+# 15. Benjamini–Hochberg FDR Correction
 
 ### Decision
 
@@ -436,7 +462,7 @@ FDR-corrected results were used for the final interpretation of statistical sign
 
 ---
 
-# 15. One-Day Lagged Analysis
+# 16. One-Day Lagged Analysis
 
 ### Decision
 
@@ -471,7 +497,7 @@ This analysis examines temporal ordering but does not by itself establish causal
 
 ---
 
-# 16. Seven-Day Historical Analysis
+# 17. Seven-Day Historical Analysis
 
 ### Decision
 
@@ -502,7 +528,7 @@ The final seven-day analysis contained:
 
 ---
 
-# 17. Final Statistical Results
+# 18. Final Statistical Results
 
 ### Decision
 
@@ -518,6 +544,8 @@ The three primary temporal analyses are:
 
 The **|Z| ≥ 1** analysis is treated separately as a sensitivity analysis.
 
+It does not replace the primary **|Z| ≥ 2** analysis and is not considered a fourth primary temporal analysis.
+
 ### Final Summary
 
 | Analysis             | Analysis Type    | Total Tests | Valid N ≥ 10 | Raw Significant | FDR Significant |
@@ -532,9 +560,7 @@ The **|Z| ≥ 1** analysis is treated separately as a sensitivity analysis.
 
 The three primary temporal analyses and the separate sensitivity analysis identified statistically significant relationships after FDR correction.
 
-The sensitivity analysis is used to assess robustness to a less conservative deviation threshold.
-
-It does not replace the primary analysis and is not considered a fourth primary temporal analysis.
+The sensitivity analysis is used to assess robustness to a less conservative behavioral-deviation threshold.
 
 All findings should be interpreted as **associations between behavioral patterns and well-being-related measures**.
 
@@ -542,11 +568,11 @@ They do not demonstrate that a behavioral change causes a change in well-being.
 
 ---
 
-# 18. Machine-Learning Strategy / System
+# 19. Machine-Learning Strategy
 
 ### Decision
 
-Develop a personalized machine-learning system to examine whether daily behavioral information can model **next-day changes in well-being**.
+Develop a personalized machine-learning system to investigate whether daily behavioral information can model **next-day changes in well-being**.
 
 ### Reason
 
@@ -580,7 +606,7 @@ The personalized ML system was implemented and executed on the PMData participan
 
 ---
 
-# 19. ML Feature Availability and Missing Data
+# 20. ML Feature Availability and Missing Data
 
 ### Decision
 
@@ -624,13 +650,9 @@ The documented availability categories were:
 
 Missingness was therefore documented explicitly rather than silently ignored.
 
-No feature was excluded because of a completely missing first-ten-day period.
-
-One original behavioral variable was identified as having a missing column for one participant.
-
 ---
 
-# 20. Personalized ML Models
+# 21. Personalized ML Models
 
 ### Decision
 
@@ -681,7 +703,7 @@ participant-specific models.
 
 ---
 
-# 21. ML Model Evaluation
+# 22. ML Model Evaluation
 
 ### Decision
 
@@ -726,7 +748,7 @@ The ML component should consequently be interpreted as an **implemented and eval
 
 ---
 
-# 22. Feature Importance
+# 23. Feature Importance
 
 ### Decision
 
@@ -759,7 +781,7 @@ Feature importance was examined:
 
 ---
 
-# 23. Interpretation of ML Results
+# 24. Interpretation of ML Results
 
 ### Decision
 
@@ -795,7 +817,7 @@ It does not establish that the feature causes changes in well-being.
 
 ---
 
-# 24. Relationship Between Statistical and ML Analyses
+# 25. Relationship Between Statistical and ML Analyses
 
 ### Decision
 
@@ -825,7 +847,7 @@ The statistical analysis provides association-based evidence, while the ML analy
 
 ---
 
-# 25. Reproducibility
+# 26. Reproducibility
 
 ### Decision
 
@@ -884,7 +906,7 @@ The final analysis pipeline was implemented, documented, and maintained in the G
 
 ---
 
-# 26. AI Use and Research Transparency
+# 27. AI Use and Research Transparency
 
 ### Decision
 
@@ -914,7 +936,7 @@ AI assistance does not replace understanding of the implemented analyses or resp
 
 ---
 
-# 27. Ethical Interpretation and Limitations
+# 28. Ethical Interpretation and Limitations
 
 ### Decision
 
@@ -955,7 +977,7 @@ A detected behavioral deviation should be considered a potential signal for furt
 
 ---
 
-# 28. Final Methodological Position
+# 29. Final Methodological Position
 
 ### Decision
 
@@ -1053,16 +1075,42 @@ The central concept of the project remains:
 
 > **Learn the individual's normal behavior → detect unusual deviations → examine their relationship with well-being → evaluate whether these patterns can support personalized early detection.**
 
-Future work should focus on:
+### Future Work
 
-* larger datasets;
-* additional participants;
-* stronger temporal validation;
-* improved predictive modeling;
-* more robust missing-data strategies;
-* external validation;
-* additional well-being measures;
-* improved feature engineering;
-* comparison of personalized and population-level models;
-* independent validation datasets;
-* and careful assessment before any real-world deployment.
+Future development should focus on:
+
+1. larger longitudinal datasets;
+2. additional participants;
+3. stronger temporal validation;
+4. improved predictive modeling;
+5. more robust missing-data strategies;
+6. external validation;
+7. additional well-being measures;
+8. improved feature engineering;
+9. comparison of personalized and population-level models;
+10. independent validation datasets;
+11. careful assessment before any real-world deployment.
+
+---
+
+# Final Status
+
+The current project contains a complete research pipeline covering:
+
+* personalized baseline construction;
+* behavioral deviation detection;
+* primary and sensitivity thresholds;
+* same-day statistical analysis;
+* one-day lagged analysis;
+* seven-day historical analysis;
+* multiple-testing correction;
+* final statistical summaries;
+* ML data preparation;
+* feature-availability analysis;
+* personalized ML modeling;
+* model evaluation;
+* feature-importance analysis;
+* methodological documentation;
+* and reproducibility documentation.
+
+The project is intended as a **research framework for personalized investigation of behavioral signals of well-being**, not as a clinical diagnostic or validated prediction system.
