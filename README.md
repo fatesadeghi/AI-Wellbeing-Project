@@ -1,4 +1,4 @@
-# AI-Based Early Detection of Changes in Well-Being Among People Living Alone
+# AI-Based Early Detection of Changes in Well-Being and Quality of Life Among People Living Alone
 
 **Personalized behavioral analysis and machine learning using the PMData dataset**
 
