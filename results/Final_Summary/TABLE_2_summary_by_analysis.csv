@@ -1,0 +1,5 @@
+Analysis,Total_Tests,Valid_Tests_N10,Raw_Significant,FDR_Significant
+lagged,1040,950,63,4
+same_day,1040,955,180,43
+sensitivity_Z1,1040,955,182,47
+seven_day,1040,845,103,6
