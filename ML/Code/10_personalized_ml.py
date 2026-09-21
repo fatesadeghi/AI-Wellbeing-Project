@@ -172,36 +172,104 @@ def get_time_splits(n_rows):
     )
 
 
-def create_behavior_features(
+def create_calendar_features(
     df,
     feature_reference_end
 ):
     """
     Create seven candidate representations for each
-    behavioral variable without using future information.
+    behavioral variable using calendar-day alignment.
 
-    The reference statistics for z-score and deviation are
-    calculated only from observations available up to
-    feature_reference_end.
+    Missing calendar dates are represented explicitly.
 
-    Rolling features use only previous observations.
+    - raw: value on the current calendar day
+    - change: current day minus previous calendar day
+    - rolling_3: mean of the previous 3 calendar days
+    - rolling_7: mean of the previous 7 calendar days
+    - zscore: historical z-score
+    - abs_zscore: absolute historical z-score
+    - deviation: historical median deviation
+
+    Historical normalization statistics are calculated only
+    from observations available up to feature_reference_end.
     """
 
-    features = pd.DataFrame(
-        index=df.index
+    working = df.copy()
+
+    working["Date"] = pd.to_datetime(
+        working["Date"],
+        errors="coerce"
     )
 
-    reference_df = df.loc[
-        df.index <= feature_reference_end
-    ].copy()
+    working = (
+        working
+        .sort_values("Date")
+        .drop_duplicates(
+            subset="Date",
+            keep="first"
+        )
+    )
+
+    if working.empty:
+        return pd.DataFrame(
+            index=df.index
+        )
+
+    original_index = working.index
+
+    calendar_index = pd.date_range(
+        start=working["Date"].min(),
+        end=working["Date"].max(),
+        freq="D"
+    )
+
+    calendar_df = (
+        working
+        .set_index("Date")
+        .reindex(calendar_index)
+    )
+
+    calendar_df.index.name = "Date"
+
+    # --------------------------------------------------------
+    # Reference data
+    # --------------------------------------------------------
+
+    reference_dates = pd.to_datetime(
+        working.loc[
+            working.index <= feature_reference_end,
+            "Date"
+        ],
+        errors="coerce"
+    )
+
+    reference_dates = reference_dates.dropna()
+
+    if len(reference_dates) > 0:
+
+        reference_end_date = (
+            reference_dates.max()
+        )
+
+        reference_df = calendar_df.loc[
+            calendar_df.index <= reference_end_date
+        ]
+
+    else:
+
+        reference_df = calendar_df.iloc[0:0]
+
+    features_calendar = pd.DataFrame(
+        index=calendar_df.index
+    )
 
     for variable in BEHAVIOR_VARS:
 
-        if variable not in df.columns:
+        if variable not in calendar_df.columns:
             continue
 
         series = pd.to_numeric(
-            df[variable],
+            calendar_df[variable],
             errors="coerce"
         )
 
@@ -214,23 +282,26 @@ def create_behavior_features(
         # 1. Raw value
         # ----------------------------------------------------
 
-        features[
+        features_calendar[
             f"{variable}__raw"
         ] = series
 
         # ----------------------------------------------------
-        # 2. Day-to-day change
+        # 2. Calendar-day change
         # ----------------------------------------------------
 
-        features[
+        features_calendar[
             f"{variable}__change"
-        ] = series.diff()
+        ] = (
+            series
+            - series.shift(1)
+        )
 
         # ----------------------------------------------------
-        # 3. Previous 3-day rolling mean
+        # 3. Previous 3 calendar-day rolling mean
         # ----------------------------------------------------
 
-        features[
+        features_calendar[
             f"{variable}__rolling_3"
         ] = (
             series
@@ -243,10 +314,10 @@ def create_behavior_features(
         )
 
         # ----------------------------------------------------
-        # 4. Previous 7-day rolling mean
+        # 4. Previous 7 calendar-day rolling mean
         # ----------------------------------------------------
 
-        features[
+        features_calendar[
             f"{variable}__rolling_7"
         ] = (
             series
@@ -286,7 +357,7 @@ def create_behavior_features(
                 series - reference_mean
             ) / reference_std
 
-        features[
+        features_calendar[
             f"{variable}__zscore"
         ] = z
 
@@ -294,7 +365,7 @@ def create_behavior_features(
         # 6. Absolute historical z-score
         # ----------------------------------------------------
 
-        features[
+        features_calendar[
             f"{variable}__abs_zscore"
         ] = z.abs()
 
@@ -306,153 +377,28 @@ def create_behavior_features(
             reference_series.median()
         )
 
-        features[
+        features_calendar[
             f"{variable}__deviation"
         ] = (
             series - reference_median
         )
 
-    return features
+    # --------------------------------------------------------
+    # Map calendar-day features back to original rows
+    # --------------------------------------------------------
 
-
-def create_features_for_training_period(
-    participant_df,
-    end_index
-):
-    """
-    Create features for a participant using only information
-    available within the specified training period.
-
-    This prevents future observations from being used when
-    constructing historical normalization statistics.
-    """
-
-    feature_df = pd.DataFrame(
-        index=participant_df.index
+    date_map = pd.to_datetime(
+        df["Date"],
+        errors="coerce"
     )
 
-    reference_df = participant_df.loc[
-        participant_df.index <= end_index
-    ].copy()
+    result = features_calendar.reindex(
+        date_map
+    )
 
-    for variable in BEHAVIOR_VARS:
+    result.index = df.index
 
-        if variable not in participant_df.columns:
-            continue
-
-        series = pd.to_numeric(
-            participant_df[variable],
-            errors="coerce"
-        )
-
-        reference_series = pd.to_numeric(
-            reference_df[variable],
-            errors="coerce"
-        )
-
-        # ----------------------------------------------------
-        # Raw
-        # ----------------------------------------------------
-
-        feature_df[
-            f"{variable}__raw"
-        ] = series
-
-        # ----------------------------------------------------
-        # Change
-        # ----------------------------------------------------
-
-        feature_df[
-            f"{variable}__change"
-        ] = series.diff()
-
-        # ----------------------------------------------------
-        # Previous 3-day mean
-        # ----------------------------------------------------
-
-        feature_df[
-            f"{variable}__rolling_3"
-        ] = (
-            series
-            .shift(1)
-            .rolling(
-                window=3,
-                min_periods=3
-            )
-            .mean()
-        )
-
-        # ----------------------------------------------------
-        # Previous 7-day mean
-        # ----------------------------------------------------
-
-        feature_df[
-            f"{variable}__rolling_7"
-        ] = (
-            series
-            .shift(1)
-            .rolling(
-                window=7,
-                min_periods=7
-            )
-            .mean()
-        )
-
-        # ----------------------------------------------------
-        # Historical z-score
-        # ----------------------------------------------------
-
-        mean_value = (
-            reference_series.mean()
-        )
-
-        std_value = (
-            reference_series.std()
-        )
-
-        if (
-            pd.isna(std_value)
-            or std_value == 0
-        ):
-
-            z = pd.Series(
-                0.0,
-                index=series.index
-            )
-
-        else:
-
-            z = (
-                series - mean_value
-            ) / std_value
-
-        feature_df[
-            f"{variable}__zscore"
-        ] = z
-
-        # ----------------------------------------------------
-        # Absolute z-score
-        # ----------------------------------------------------
-
-        feature_df[
-            f"{variable}__abs_zscore"
-        ] = z.abs()
-
-        # ----------------------------------------------------
-        # Historical median deviation
-        # ----------------------------------------------------
-
-        median_value = (
-            reference_series.median()
-        )
-
-        feature_df[
-            f"{variable}__deviation"
-        ] = (
-            series - median_value
-        )
-
-    return feature_df
+    return result
 
 
 # ============================================================
@@ -660,26 +606,12 @@ for participant in participants:
             continue
 
         # ----------------------------------------------------
-        # Determine training/test rows chronologically
+        # Determine valid target rows
         # ----------------------------------------------------
 
         valid_indices = np.where(
             valid_target_mask.values
         )[0]
-
-        X_full = participant_df[
-            [
-                variable
-                for variable in participant_df.columns
-                if variable in BEHAVIOR_VARS
-            ]
-        ].copy()
-
-        y_full = target_values.copy()
-
-        # ----------------------------------------------------
-        # Create target-valid dataset
-        # ----------------------------------------------------
 
         valid_df = participant_df.loc[
             valid_target_mask
@@ -698,53 +630,11 @@ for participant in participants:
         )
 
         # ----------------------------------------------------
-        # Build features using the complete chronological
-        # participant series.
-        #
-        # Raw/change/rolling features do not use future rows.
-        # Historical normalization is based on the training
-        # boundary used below.
-        # ----------------------------------------------------
-
-        all_features = (
-            create_features_for_training_period(
-                participant_df,
-                end_index=len(participant_df) - 1
-            )
-        )
-
-        all_features = (
-            all_features
-            .reset_index(drop=True)
-        )
-
-        X = all_features.loc[
-            valid_target_mask.values
-        ].reset_index(
-            drop=True
-        )
-
-        # Keep only active participant features
-        X = X[
-            [
-                column
-                for column in participant_feature_columns
-                if column in X.columns
-            ]
-        ]
-
-        dates = valid_df[
-            "Date"
-        ].reset_index(
-            drop=True
-        )
-
-        # ----------------------------------------------------
         # Time-series cross-validation
         # ----------------------------------------------------
 
         tscv = get_time_splits(
-            len(X)
+            len(y)
         )
 
         if tscv is None:
@@ -762,15 +652,57 @@ for participant in participants:
 
         fold_test_dates = []
 
-        for train_index, test_index in tscv.split(X):
+        for train_index, test_index in tscv.split(y):
 
-            X_train = X.iloc[
-                train_index
-            ].copy()
+            # ------------------------------------------------
+            # Actual participant rows belonging to this fold
+            # ------------------------------------------------
 
-            X_test = X.iloc[
-                test_index
-            ].copy()
+            train_original_indices = (
+                valid_indices[train_index]
+            )
+
+            test_original_indices = (
+                valid_indices[test_index]
+            )
+
+            # ------------------------------------------------
+            # Build calendar-aware features using ONLY the
+            # training boundary.
+            # ------------------------------------------------
+
+            training_end_index = (
+                train_original_indices.max()
+            )
+
+            fold_features = (
+                create_calendar_features(
+                    participant_df,
+                    feature_reference_end=training_end_index
+                )
+            )
+
+            fold_features = fold_features[
+                [
+                    column
+                    for column in participant_feature_columns
+                    if column in fold_features.columns
+                ]
+            ]
+
+            X_train_fold = (
+                fold_features.iloc[
+                    train_original_indices
+                ]
+                .copy()
+            )
+
+            X_test_fold = (
+                fold_features.iloc[
+                    test_original_indices
+                ]
+                .copy()
+            )
 
             y_train = y.iloc[
                 train_index
@@ -779,163 +711,6 @@ for participant in participants:
             y_test = y.iloc[
                 test_index
             ].copy()
-
-            # ------------------------------------------------
-            # Recalculate normalization statistics using ONLY
-            # the training observations for this fold.
-            #
-            # This is especially important for z-score and
-            # deviation features.
-            # ------------------------------------------------
-
-            training_reference = (
-                participant_df.loc[
-                    valid_indices[train_index]
-                ].copy()
-            )
-
-            fold_features = pd.DataFrame(
-                index=participant_df.index
-            )
-
-            for variable in active_behaviors:
-
-                if variable not in participant_df.columns:
-                    continue
-
-                series = pd.to_numeric(
-                    participant_df[variable],
-                    errors="coerce"
-                )
-
-                reference_series = pd.to_numeric(
-                    training_reference[variable],
-                    errors="coerce"
-                )
-
-                # --------------------------------------------
-                # Raw
-                # --------------------------------------------
-
-                fold_features[
-                    f"{variable}__raw"
-                ] = series
-
-                # --------------------------------------------
-                # Change
-                # --------------------------------------------
-
-                fold_features[
-                    f"{variable}__change"
-                ] = series.diff()
-
-                # --------------------------------------------
-                # Previous 3-day rolling mean
-                # --------------------------------------------
-
-                fold_features[
-                    f"{variable}__rolling_3"
-                ] = (
-                    series
-                    .shift(1)
-                    .rolling(
-                        window=3,
-                        min_periods=3
-                    )
-                    .mean()
-                )
-
-                # --------------------------------------------
-                # Previous 7-day rolling mean
-                # --------------------------------------------
-
-                fold_features[
-                    f"{variable}__rolling_7"
-                ] = (
-                    series
-                    .shift(1)
-                    .rolling(
-                        window=7,
-                        min_periods=7
-                    )
-                    .mean()
-                )
-
-                # --------------------------------------------
-                # Training-only z-score
-                # --------------------------------------------
-
-                reference_mean = (
-                    reference_series.mean()
-                )
-
-                reference_std = (
-                    reference_series.std()
-                )
-
-                if (
-                    pd.isna(reference_std)
-                    or reference_std == 0
-                ):
-
-                    z = pd.Series(
-                        0.0,
-                        index=series.index
-                    )
-
-                else:
-
-                    z = (
-                        series - reference_mean
-                    ) / reference_std
-
-                fold_features[
-                    f"{variable}__zscore"
-                ] = z
-
-                # --------------------------------------------
-                # Absolute z-score
-                # --------------------------------------------
-
-                fold_features[
-                    f"{variable}__abs_zscore"
-                ] = z.abs()
-
-                # --------------------------------------------
-                # Training-only median deviation
-                # --------------------------------------------
-
-                reference_median = (
-                    reference_series.median()
-                )
-
-                fold_features[
-                    f"{variable}__deviation"
-                ] = (
-                    series - reference_median
-                )
-
-            fold_features = (
-                fold_features
-                .loc[
-                    :,
-                    participant_feature_columns
-                ]
-            )
-
-            X_train_fold = (
-                fold_features.iloc[
-                    train_index
-                ]
-                .copy()
-            )
-
-            X_test_fold = (
-                fold_features.iloc[
-                    test_index
-                ]
-                .copy()
-            )
 
             # ------------------------------------------------
             # Train model
@@ -961,7 +736,9 @@ for participant in participants:
             )
 
             fold_test_dates.extend(
-                dates.iloc[
+                valid_df[
+                    "Date"
+                ].iloc[
                     test_index
                 ].values
             )
@@ -1030,14 +807,17 @@ for participant in participants:
         # ----------------------------------------------------
         # Fit final model on all available observations
         #
-        # Feature construction for the final model uses the
-        # participant's available historical data.
+        # Final calendar-aware features use the participant's
+        # complete available history. No future observation
+        # beyond the final recorded date exists here.
         # ----------------------------------------------------
 
         final_features = (
-            create_features_for_training_period(
+            create_calendar_features(
                 participant_df,
-                end_index=len(participant_df) - 1
+                feature_reference_end=(
+                    len(participant_df) - 1
+                )
             )
         )
 
