@@ -101,8 +101,8 @@ table_1_columns = [
     for col in [
         "Analysis",
         "Participant",
-        "Objective_Variable",
-        "Wellness_Variable",
+        "Behavioral_Variable",
+        "Wellbeing_Variable",
         "r",
         "p",
         "N",
@@ -153,10 +153,10 @@ table_2 = (
 # ============================================================
 
 table_3 = (
-    fdr_df.groupby("Wellness_Variable")
+    fdr_df.groupby("Wellbeing_Variable")
     .agg(
         FDR_Significant_Relationships=(
-            "Wellness_Variable",
+            "Wellbeing_Variable",
             "size"
         ),
         Participants=(
@@ -182,10 +182,10 @@ table_3 = table_3.sort_values(
 # ============================================================
 
 table_4 = (
-    fdr_df.groupby("Objective_Variable")
+    fdr_df.groupby("Behavioral_Variable")
     .agg(
         FDR_Significant_Relationships=(
-            "Objective_Variable",
+            "Behavioral_Variable",
             "size"
         ),
         Participants=(
