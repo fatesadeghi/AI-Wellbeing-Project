@@ -367,7 +367,9 @@ for filename in participant_files:
     #
     # Wellbeing(t+1) - Wellbeing(t)
     #
-    # This is the prediction target for ML.
+    # The next day must be exactly one calendar day later.
+    # If the next recorded observation is not the following
+    # calendar day, the target is set to NaN.
     # --------------------------------------------------------
 
     for variable in WELLBEING_VARS:
@@ -375,12 +377,30 @@ for filename in participant_files:
         if variable not in ml_df.columns:
             continue
 
+        next_date = (
+            ml_df["Date"].shift(-1)
+        )
+
+        next_value = (
+            ml_df[variable].shift(-1)
+        )
+
+        current_value = (
+            ml_df[variable]
+        )
+
+        is_next_calendar_day = (
+            next_date
+            ==
+            ml_df["Date"] + pd.Timedelta(days=1)
+        )
+
         ml_df[
             f"NextDayChange_{variable}"
-        ] = (
-            ml_df[variable].shift(-1)
-            -
-            ml_df[variable]
+        ] = np.where(
+            is_next_calendar_day,
+            next_value - current_value,
+            np.nan
         )
 
     all_ml_data.append(
