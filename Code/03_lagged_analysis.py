@@ -440,8 +440,8 @@ for participant in participants:
             results.append(
                 {
                     "Participant": participant,
-                    "Objective_Variable": behavior,
-                    "Wellness_Variable": wellbeing_variable,
+                    "Behavioral_Variable": behavior,
+                    "Wellbeing_Variable": wellbeing_variable,
                     "r": r,
                     "p": p,
                     "N": n,
