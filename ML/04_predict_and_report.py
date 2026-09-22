@@ -4,50 +4,52 @@ import numpy as np
 import pandas as pd
 
 
-# ============================================================
-# 1. PROJECT PATHS
-# ============================================================
-
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 
-ML_DIR = PROJECT_ROOT / "ML"
-RESULTS_DIR = ML_DIR / "Results"
+RESULTS_DIR = PROJECT_ROOT / "ML" / "Results"
 
-FEATURE_FILE = (
-    RESULTS_DIR / "behavior_7day_features.csv"
+RESULTS_DIR.mkdir(
+    parents=True,
+    exist_ok=True,
 )
 
-PREDICTION_FILE = (
-    RESULTS_DIR / "personal_model_predictions.csv"
+
+FEATURES_FILE = (
+    RESULTS_DIR
+    / "behavior_7day_features.csv"
+)
+
+PREDICTIONS_FILE = (
+    RESULTS_DIR
+    / "personal_model_predictions.csv"
 )
 
 WELLBEING_FILE = (
-    RESULTS_DIR / "wellbeing_index.csv"
+    RESULTS_DIR
+    / "wellbeing_index.csv"
 )
 
-SHORT_OUTPUT_FILE = (
-    RESULTS_DIR / "wellbeing_predictions_short.csv"
+SHORT_OUTPUT = (
+    RESULTS_DIR
+    / "wellbeing_predictions_short.csv"
 )
 
-FULL_OUTPUT_FILE = (
-    RESULTS_DIR / "wellbeing_predictions_full.csv"
+FULL_OUTPUT = (
+    RESULTS_DIR
+    / "wellbeing_predictions_full.csv"
 )
 
-TEXT_REPORT_FILE = (
-    RESULTS_DIR / "wellbeing_research_report.txt"
+REPORT_OUTPUT = (
+    RESULTS_DIR
+    / "wellbeing_research_report.txt"
 )
 
-
-# ============================================================
-# 2. CONFIGURATION
-# ============================================================
 
 LOW_THRESHOLD = -1.0
 HIGH_THRESHOLD = 1.0
-
 MIN_BASELINE_SAMPLES = 2
-
 TOP_BEHAVIOR_CHANGES = 5
+
 
 BEHAVIOR_VARIABLES = [
     "Steps",
@@ -66,18 +68,105 @@ BEHAVIOR_VARIABLES = [
 ]
 
 
-# ============================================================
-# 3. INPUT VALIDATION
-# ============================================================
+def classify_wellbeing(z_score):
 
-def validate_input_files() -> None:
-    """
-    Make sure all required input files exist.
-    """
+    if pd.isna(z_score):
+        return "Insufficient_History"
+
+    if z_score < LOW_THRESHOLD:
+        return "Low"
+
+    if z_score > HIGH_THRESHOLD:
+        return "High"
+
+    return "Moderate"
+
+
+def classify_alert(status):
+
+    if status == "Low":
+        return "High"
+
+    if status == "Moderate":
+        return "Moderate"
+
+    if status == "High":
+        return "Low"
+
+    return "Unavailable"
+
+
+def get_behavior_summary(row):
+
+    increasing = []
+    decreasing = []
+    stable = []
+
+    for variable in BEHAVIOR_VARIABLES:
+
+        column = f"{variable}_7d_slope"
+
+        value = row.get(column, np.nan)
+
+        if pd.isna(value):
+            continue
+
+        if value > 0:
+            increasing.append(variable)
+
+        elif value < 0:
+            decreasing.append(variable)
+
+        else:
+            stable.append(variable)
+
+    return (
+        increasing,
+        decreasing,
+        stable,
+    )
+
+
+def get_top_behavior_changes(row):
+
+    changes = []
+
+    for variable in BEHAVIOR_VARIABLES:
+
+        column = f"{variable}_7d_change"
+
+        value = row.get(column, np.nan)
+
+        if pd.isna(value):
+            continue
+
+        changes.append(
+            (
+                variable,
+                value,
+                abs(value),
+            )
+        )
+
+    changes.sort(
+        key=lambda x: x[2],
+        reverse=True,
+    )
+
+    return changes[:TOP_BEHAVIOR_CHANGES]
+
+
+def main():
+
+    print()
+    print("=" * 80)
+    print("PREDICT AND GENERATE WELLBEING REPORT")
+    print("=" * 80)
+    print()
 
     required_files = [
-        FEATURE_FILE,
-        PREDICTION_FILE,
+        FEATURES_FILE,
+        PREDICTIONS_FILE,
         WELLBEING_FILE,
     ]
 
@@ -89,1009 +178,398 @@ def validate_input_files() -> None:
                 f"Required file not found:\n{file_path}"
             )
 
-
-def validate_columns(
-    features: pd.DataFrame,
-    predictions: pd.DataFrame,
-    wellbeing: pd.DataFrame,
-) -> None:
-    """
-    Validate all required columns.
-    """
-
-    feature_columns = [
-        "participant_id",
-        "target_date",
-    ]
-
-    for variable in BEHAVIOR_VARIABLES:
-
-        feature_columns.extend(
-            [
-                f"{variable}_7d_slope",
-                f"{variable}_7d_change",
-            ]
-        )
-
-    missing_features = [
-        column
-        for column in feature_columns
-        if column not in features.columns
-    ]
-
-    if missing_features:
-
-        raise ValueError(
-            "Missing feature columns:\n"
-            + "\n".join(missing_features)
-        )
-
-    prediction_columns = [
-        "participant_id",
-        "target_date",
-        "actual_wellbeing",
-        "predicted_wellbeing",
-        "prediction_status",
-    ]
-
-    missing_predictions = [
-        column
-        for column in prediction_columns
-        if column not in predictions.columns
-    ]
-
-    if missing_predictions:
-
-        raise ValueError(
-            "Missing prediction columns:\n"
-            + "\n".join(missing_predictions)
-        )
-
-    wellbeing_columns = [
-        "participant_id",
-        "date",
-        "Wellbeing_Index",
-    ]
-
-    missing_wellbeing = [
-        column
-        for column in wellbeing_columns
-        if column not in wellbeing.columns
-    ]
-
-    if missing_wellbeing:
-
-        raise ValueError(
-            "Missing wellbeing columns:\n"
-            + "\n".join(missing_wellbeing)
-        )
-
-
-# ============================================================
-# 4. LOAD DATA
-# ============================================================
-
-def load_data() -> tuple[
-    pd.DataFrame,
-    pd.DataFrame,
-    pd.DataFrame,
-]:
-    """
-    Load all required datasets.
-    """
-
-    validate_input_files()
-
-    features = pd.read_csv(
-        FEATURE_FILE
+    features_df = pd.read_csv(
+        FEATURES_FILE
     )
 
-    predictions = pd.read_csv(
-        PREDICTION_FILE
+    predictions_df = pd.read_csv(
+        PREDICTIONS_FILE
     )
 
-    wellbeing = pd.read_csv(
+    wellbeing_df = pd.read_csv(
         WELLBEING_FILE
     )
 
-    validate_columns(
-        features,
-        predictions,
-        wellbeing,
-    )
-
-    return (
-        features,
-        predictions,
-        wellbeing,
-    )
-
-
-# ============================================================
-# 5. PREPARE DATA
-# ============================================================
-
-def prepare_data(
-    features: pd.DataFrame,
-    predictions: pd.DataFrame,
-    wellbeing: pd.DataFrame,
-) -> tuple[
-    pd.DataFrame,
-    pd.DataFrame,
-    pd.DataFrame,
-]:
-    """
-    Convert dates and participant IDs into consistent formats.
-    """
-
-    features = features.copy()
-    predictions = predictions.copy()
-    wellbeing = wellbeing.copy()
-
-    features["target_date"] = pd.to_datetime(
-        features["target_date"],
+    features_df["target_date"] = pd.to_datetime(
+        features_df["target_date"],
         errors="coerce",
     )
 
-    predictions["target_date"] = pd.to_datetime(
-        predictions["target_date"],
+    predictions_df["target_date"] = pd.to_datetime(
+        predictions_df["target_date"],
         errors="coerce",
     )
 
-    wellbeing["date"] = pd.to_datetime(
-        wellbeing["date"],
+    wellbeing_df["date"] = pd.to_datetime(
+        wellbeing_df["date"],
         errors="coerce",
     )
 
-    features["participant_id"] = (
-        features["participant_id"]
-        .astype(str)
-    )
-
-    predictions["participant_id"] = (
-        predictions["participant_id"]
-        .astype(str)
-    )
-
-    wellbeing["participant_id"] = (
-        wellbeing["participant_id"]
-        .astype(str)
-    )
-
-    predictions["actual_wellbeing"] = pd.to_numeric(
-        predictions["actual_wellbeing"],
-        errors="coerce",
-    )
-
-    predictions["predicted_wellbeing"] = pd.to_numeric(
-        predictions["predicted_wellbeing"],
-        errors="coerce",
-    )
-
-    wellbeing["Wellbeing_Index"] = pd.to_numeric(
-        wellbeing["Wellbeing_Index"],
-        errors="coerce",
-    )
-
-    return (
-        features,
-        predictions,
-        wellbeing,
-    )
-
-
-# ============================================================
-# 6. CALCULATE HISTORICAL BASELINE
-# ============================================================
-
-def calculate_historical_baseline(
-    wellbeing_df: pd.DataFrame,
-    participant_id: str,
-    target_date: pd.Timestamp,
-) -> tuple[float, float, int]:
-    """
-    Calculate the participant's historical Wellbeing Index
-    mean and standard deviation using only observations
-    BEFORE the target date.
-    """
-
-    historical = wellbeing_df[
-        (wellbeing_df["participant_id"] == participant_id)
-        & (wellbeing_df["date"] < target_date)
+    predictions_df = predictions_df[
+        predictions_df["prediction_status"]
+        == "Predicted"
     ].copy()
 
-    historical = historical.dropna(
-        subset=["Wellbeing_Index"]
-    )
-
-    values = historical[
-        "Wellbeing_Index"
-    ]
-
-    sample_count = len(values)
-
-    if sample_count < MIN_BASELINE_SAMPLES:
-
-        return (
-            np.nan,
-            np.nan,
-            sample_count,
-        )
-
-    mean_value = values.mean()
-
-    std_value = values.std(
-        ddof=1
-    )
-
-    if pd.isna(std_value) or std_value == 0:
-
-        return (
-            float(mean_value),
-            np.nan,
-            sample_count,
-        )
-
-    return (
-        float(mean_value),
-        float(std_value),
-        sample_count,
-    )
-
-
-# ============================================================
-# 7. CLASSIFY WELLBEING
-# ============================================================
-
-def classify_wellbeing(
-    wellbeing_z: float,
-) -> str:
-    """
-    Convert Wellbeing Z-score into Low / Moderate / High.
-    """
-
-    if pd.isna(wellbeing_z):
-
-        return "Unavailable"
-
-    if wellbeing_z < LOW_THRESHOLD:
-
-        return "Low"
-
-    if wellbeing_z > HIGH_THRESHOLD:
-
-        return "High"
-
-    return "Moderate"
-
-
-# ============================================================
-# 8. DETERMINE ALERT LEVEL
-# ============================================================
-
-def determine_alert_level(
-    wellbeing_status: str,
-) -> str:
-    """
-    Convert wellbeing status into alert level.
-    """
-
-    if wellbeing_status == "Low":
-
-        return "High"
-
-    if wellbeing_status == "High":
-
-        return "Low"
-
-    if wellbeing_status == "Moderate":
-
-        return "Moderate"
-
-    return "Unavailable"
-
-
-# ============================================================
-# 9. BEHAVIORAL TREND DESCRIPTION
-# ============================================================
-
-def describe_slope(
-    slope: float,
-) -> str:
-    """
-    Describe the direction of a behavioral trend.
-    """
-
-    if pd.isna(slope):
-
-        return "Unavailable"
-
-    if slope > 0:
-
-        return "Increasing"
-
-    if slope < 0:
-
-        return "Decreasing"
-
-    return "Stable"
-
-
-# ============================================================
-# 10. BUILD BEHAVIORAL TREND SUMMARY
-# ============================================================
-
-def build_behavior_trend_summary(
-    row: pd.Series,
-) -> str:
-    """
-    Create a compact textual summary of 7-day trends.
-    """
-
-    trends = []
-
-    for variable in BEHAVIOR_VARIABLES:
-
-        slope_column = (
-            f"{variable}_7d_slope"
-        )
-
-        slope = row.get(
-            slope_column,
-            np.nan,
-        )
-
-        direction = describe_slope(
-            slope
-        )
-
-        if direction != "Unavailable":
-
-            trends.append(
-                f"{variable}: {direction}"
-            )
-
-    if not trends:
-
-        return "No behavioral trend information available."
-
-    return "; ".join(trends)
-
-
-# ============================================================
-# 11. FIND IMPORTANT BEHAVIORAL CHANGES
-# ============================================================
-
-def find_important_behavior_changes(
-    row: pd.Series,
-) -> str:
-    """
-    Identify the largest absolute 7-day behavioral changes.
-
-    Because behavioral variables have different units, this
-    section reports the raw change together with the variable
-    name rather than comparing the numerical magnitudes as
-    if they were on the same scale.
-    """
-
-    changes = []
-
-    for variable in BEHAVIOR_VARIABLES:
-
-        change_column = (
-            f"{variable}_7d_change"
-        )
-
-        change = row.get(
-            change_column,
-            np.nan,
-        )
-
-        if pd.isna(change):
-
-            continue
-
-        changes.append(
-            {
-                "variable": variable,
-                "change": float(change),
-                "absolute_change": abs(
-                    float(change)
-                ),
-            }
-        )
-
-    if not changes:
-
-        return "No measurable behavioral changes available."
-
-    changes = sorted(
-        changes,
-        key=lambda item: item["absolute_change"],
-        reverse=True,
-    )
-
-    top_changes = changes[
-        :TOP_BEHAVIOR_CHANGES
-    ]
-
-    descriptions = []
-
-    for item in top_changes:
-
-        variable = item["variable"]
-        change = item["change"]
-
-        if change > 0:
-
-            direction = "increased"
-
-        elif change < 0:
-
-            direction = "decreased"
-
-        else:
-
-            direction = "was stable"
-
-        descriptions.append(
-            f"{variable} {direction} "
-            f"(change={change:.3f})"
-        )
-
-    return "; ".join(
-        descriptions
-    )
-
-
-# ============================================================
-# 12. INTERPRETATION
-# ============================================================
-
-def build_interpretation(
-    wellbeing_status: str,
-    alert_level: str,
-) -> str:
-    """
-    Create a concise interpretation of the predicted status.
-    """
-
-    if wellbeing_status == "High":
-
-        return (
-            "Predicted wellbeing is above the participant's "
-            "historical reference range."
-        )
-
-    if wellbeing_status == "Moderate":
-
-        return (
-            "Predicted wellbeing is within the participant's "
-            "historical reference range."
-        )
-
-    if wellbeing_status == "Low":
-
-        return (
-            "Predicted wellbeing is below the participant's "
-            "historical reference range and may warrant "
-            "closer monitoring."
-        )
-
-    return (
-        "There is not enough historical wellbeing information "
-        "to determine the predicted status."
-    )
-
-
-# ============================================================
-# 13. BUILD FINAL REPORT
-# ============================================================
-
-def build_reports(
-    features: pd.DataFrame,
-    predictions: pd.DataFrame,
-    wellbeing: pd.DataFrame,
-) -> tuple[
-    pd.DataFrame,
-    pd.DataFrame,
-]:
-    """
-    Build short and full prediction reports.
-    """
-
-    # --------------------------------------------------------
-    # Keep only actual predictions.
-    # --------------------------------------------------------
-
-    predictions = predictions[
-        predictions[
-            "prediction_status"
-        ] == "Predicted"
-    ].copy()
-
-    predictions = predictions.dropna(
-        subset=[
-            "predicted_wellbeing",
-            "target_date",
-        ]
-    )
-
-    # --------------------------------------------------------
-    # Merge behavioral features.
-    # --------------------------------------------------------
-
-    report = predictions.merge(
-        features,
+    merged_df = predictions_df.merge(
+        features_df,
         on=[
             "participant_id",
             "target_date",
         ],
         how="left",
-        validate="one_to_one",
     )
 
-    # --------------------------------------------------------
-    # Create report rows.
-    # --------------------------------------------------------
-
-    full_rows = []
-
-    for _, row in report.iterrows():
-
-        participant_id = row[
-            "participant_id"
+    merged_df = merged_df.sort_values(
+        [
+            "participant_id",
+            "target_date",
         ]
+    ).reset_index(drop=True)
 
-        target_date = row[
-            "target_date"
-        ]
+    results = []
+    report_sections = []
 
-        predicted_wellbeing = float(
-            row[
+    for participant_id, participant_data in merged_df.groupby(
+        "participant_id"
+    ):
+
+        participant_data = (
+            participant_data
+            .sort_values("target_date")
+            .reset_index(drop=True)
+        )
+
+        participant_wellbeing = wellbeing_df[
+            wellbeing_df["participant_id"]
+            == participant_id
+        ].copy()
+
+        for _, row in participant_data.iterrows():
+
+            target_date = row["target_date"]
+
+            historical = participant_wellbeing[
+                participant_wellbeing["date"]
+                < target_date
+            ].copy()
+
+            historical = historical[
+                historical["Wellbeing_Index"]
+                .notna()
+            ]
+
+            predicted_value = row[
                 "predicted_wellbeing"
             ]
-        )
 
-        # ----------------------------------------------------
-        # Historical baseline
-        # ----------------------------------------------------
+            baseline_mean = np.nan
+            baseline_std = np.nan
+            predicted_z = np.nan
 
-        baseline_mean, baseline_sd, baseline_n = (
-            calculate_historical_baseline(
-                wellbeing_df=wellbeing,
-                participant_id=participant_id,
-                target_date=target_date,
+            if len(historical) >= MIN_BASELINE_SAMPLES:
+
+                baseline_mean = (
+                    historical[
+                        "Wellbeing_Index"
+                    ].mean()
+                )
+
+                baseline_std = (
+                    historical[
+                        "Wellbeing_Index"
+                    ].std(
+                        ddof=1
+                    )
+                )
+
+                if (
+                    pd.notna(baseline_std)
+                    and baseline_std > 0
+                ):
+
+                    predicted_z = (
+                        predicted_value
+                        - baseline_mean
+                    ) / baseline_std
+
+            status = classify_wellbeing(
+                predicted_z
             )
-        )
 
-        # ----------------------------------------------------
-        # Wellbeing Z-score
-        # ----------------------------------------------------
-
-        if (
-            pd.isna(baseline_sd)
-            or baseline_sd == 0
-        ):
-
-            wellbeing_z = np.nan
-
-        else:
-
-            wellbeing_z = (
-                predicted_wellbeing
-                - baseline_mean
-            ) / baseline_sd
-
-        # ----------------------------------------------------
-        # Status and alert
-        # ----------------------------------------------------
-
-        wellbeing_status = (
-            classify_wellbeing(
-                wellbeing_z
+            alert = classify_alert(
+                status
             )
-        )
 
-        alert_level = (
-            determine_alert_level(
-                wellbeing_status
+            increasing, decreasing, stable = (
+                get_behavior_summary(row)
             )
-        )
 
-        # ----------------------------------------------------
-        # Behavioral information
-        # ----------------------------------------------------
-
-        trend_summary = (
-            build_behavior_trend_summary(
-                row
+            top_changes = (
+                get_top_behavior_changes(row)
             )
-        )
 
-        important_changes = (
-            find_important_behavior_changes(
-                row
+            results.append(
+                {
+                    "participant_id":
+                        participant_id,
+                    "target_date":
+                        target_date,
+                    "predicted_wellbeing":
+                        predicted_value,
+                    "historical_baseline_mean":
+                        baseline_mean,
+                    "historical_baseline_sd":
+                        baseline_std,
+                    "predicted_wellbeing_z":
+                        predicted_z,
+                    "wellbeing_status":
+                        status,
+                    "alert_level":
+                        alert,
+                    "training_samples":
+                        row["training_samples"],
+                    "prediction_status":
+                        row["prediction_status"],
+                }
             )
-        )
 
-        interpretation = (
-            build_interpretation(
-                wellbeing_status,
-                alert_level,
+            change_text = []
+
+            for variable, value, _ in top_changes:
+
+                direction = (
+                    "increase"
+                    if value > 0
+                    else "decrease"
+                )
+
+                change_text.append(
+                    f"{variable}: "
+                    f"{direction} "
+                    f"({value:.3f})"
+                )
+
+            report_sections.append(
+                {
+                    "participant_id":
+                        participant_id,
+                    "target_date":
+                        target_date,
+                    "predicted_wellbeing":
+                        predicted_value,
+                    "predicted_z":
+                        predicted_z,
+                    "status":
+                        status,
+                    "alert":
+                        alert,
+                    "increasing":
+                        increasing,
+                    "decreasing":
+                        decreasing,
+                    "stable":
+                        stable,
+                    "changes":
+                        change_text,
+                }
             )
-        )
 
-        # ----------------------------------------------------
-        # Full report row
-        # ----------------------------------------------------
-
-        full_rows.append(
-            {
-                "participant_id": participant_id,
-                "target_date": target_date,
-                "predicted_wellbeing": (
-                    predicted_wellbeing
-                ),
-                "historical_baseline_mean": (
-                    baseline_mean
-                ),
-                "historical_baseline_sd": (
-                    baseline_sd
-                ),
-                "historical_baseline_n": (
-                    baseline_n
-                ),
-                "predicted_wellbeing_z": (
-                    wellbeing_z
-                ),
-                "wellbeing_status": (
-                    wellbeing_status
-                ),
-                "alert_level": (
-                    alert_level
-                ),
-                "behavioral_7day_trends": (
-                    trend_summary
-                ),
-                "important_behavioral_changes": (
-                    important_changes
-                ),
-                "interpretation": (
-                    interpretation
-                ),
-            }
-        )
-
-    full_df = pd.DataFrame(
-        full_rows
+    results_df = pd.DataFrame(
+        results
     )
 
-    # --------------------------------------------------------
-    # Short output
-    # --------------------------------------------------------
+    results_df = results_df.sort_values(
+        [
+            "participant_id",
+            "target_date",
+        ]
+    ).reset_index(drop=True)
 
-    short_df = full_df[
+    short_df = results_df[
         [
             "participant_id",
             "target_date",
             "predicted_wellbeing",
+            "predicted_wellbeing_z",
             "wellbeing_status",
             "alert_level",
         ]
     ].copy()
 
-    return (
-        short_df,
-        full_df,
-    )
-
-
-# ============================================================
-# 14. CREATE TEXT RESEARCH REPORT
-# ============================================================
-
-def create_text_report(
-    full_df: pd.DataFrame,
-) -> None:
-    """
-    Create a human-readable research report.
-    """
-
-    lines = []
-
-    lines.append(
-        "=" * 80
-    )
-
-    lines.append(
-        "PERSONALIZED WELLBEING PREDICTION REPORT"
-    )
-
-    lines.append(
-        "=" * 80
-    )
-
-    lines.append("")
-
-    lines.append(
-        "Status thresholds:"
-    )
-
-    lines.append(
-        "  Z < -1       -> Low"
-    )
-
-    lines.append(
-        "  -1 <= Z <= 1 -> Moderate"
-    )
-
-    lines.append(
-        "  Z > 1        -> High"
-    )
-
-    lines.append("")
-
-    lines.append(
-        "Alert levels:"
-    )
-
-    lines.append(
-        "  High wellbeing     -> Low alert"
-    )
-
-    lines.append(
-        "  Moderate wellbeing -> Moderate alert"
-    )
-
-    lines.append(
-        "  Low wellbeing      -> High alert"
-    )
-
-    lines.append("")
-
-    lines.append(
-        "Note: Baseline statistics use only wellbeing "
-        "observations available before each target date."
-    )
-
-    lines.append("")
-
-    for _, row in full_df.iterrows():
-
-        lines.append(
-            "-" * 80
-        )
-
-        lines.append(
-            f"Participant: "
-            f"{row['participant_id']}"
-        )
-
-        lines.append(
-            f"Target Date: "
-            f"{row['target_date'].date()}"
-        )
-
-        lines.append(
-            f"Predicted Wellbeing: "
-            f"{row['predicted_wellbeing']:.3f}"
-        )
-
-        lines.append(
-            f"Wellbeing Status: "
-            f"{row['wellbeing_status']}"
-        )
-
-        lines.append(
-            f"Alert Level: "
-            f"{row['alert_level']}"
-        )
-
-        if not pd.isna(
-            row["predicted_wellbeing_z"]
-        ):
-
-            lines.append(
-                f"Predicted Wellbeing Z-score: "
-                f"{row['predicted_wellbeing_z']:.3f}"
-            )
-
-        lines.append("")
-
-        lines.append(
-            "7-Day Behavioral Trends:"
-        )
-
-        lines.append(
-            str(
-                row[
-                    "behavioral_7day_trends"
-                ]
-            )
-        )
-
-        lines.append("")
-
-        lines.append(
-            "Important Behavioral Changes:"
-        )
-
-        lines.append(
-            str(
-                row[
-                    "important_behavioral_changes"
-                ]
-            )
-        )
-
-        lines.append("")
-
-        lines.append(
-            "Interpretation:"
-        )
-
-        lines.append(
-            str(
-                row[
-                    "interpretation"
-                ]
-            )
-        )
-
-        lines.append("")
-
-    TEXT_REPORT_FILE.write_text(
-        "\n".join(lines),
-        encoding="utf-8",
-    )
-
-
-# ============================================================
-# 15. MAIN
-# ============================================================
-
-def main() -> None:
-
-    print("=" * 80)
-    print("PREDICT AND REPORT PERSONALIZED WELLBEING")
-    print("=" * 80)
-
-    print()
-
-    # --------------------------------------------------------
-    # Load
-    # --------------------------------------------------------
-
-    features, predictions, wellbeing = (
-        load_data()
-    )
-
-    print(
-        f"Feature rows: {len(features)}"
-    )
-
-    print(
-        f"Prediction rows: {len(predictions)}"
-    )
-
-    print(
-        f"Wellbeing rows: {len(wellbeing)}"
-    )
-
-    print()
-
-    # --------------------------------------------------------
-    # Prepare
-    # --------------------------------------------------------
-
-    features, predictions, wellbeing = (
-        prepare_data(
-            features,
-            predictions,
-            wellbeing,
-        )
-    )
-
-    # --------------------------------------------------------
-    # Build reports
-    # --------------------------------------------------------
-
-    short_df, full_df = (
-        build_reports(
-            features,
-            predictions,
-            wellbeing,
-        )
-    )
-
-    # --------------------------------------------------------
-    # Save CSV outputs
-    # --------------------------------------------------------
+    full_df = results_df.copy()
 
     short_df.to_csv(
-        SHORT_OUTPUT_FILE,
+        SHORT_OUTPUT,
         index=False,
     )
 
     full_df.to_csv(
-        FULL_OUTPUT_FILE,
+        FULL_OUTPUT,
         index=False,
     )
 
-    # --------------------------------------------------------
-    # Save text report
-    # --------------------------------------------------------
+    with open(
+        REPORT_OUTPUT,
+        "w",
+        encoding="utf-8",
+    ) as report_file:
 
-    create_text_report(
-        full_df
-    )
+        report_file.write(
+            "PERSONALIZED WELLBEING PREDICTION REPORT\n"
+        )
 
-    # ========================================================
-    # FINAL SUMMARY
-    # ========================================================
+        report_file.write(
+            "=" * 80
+            + "\n\n"
+        )
 
-    print("=" * 80)
-    print("COMPLETED")
-    print("=" * 80)
+        report_file.write(
+            "Wellbeing status thresholds:\n"
+        )
+
+        report_file.write(
+            "Z < -1   = Low\n"
+        )
+
+        report_file.write(
+            "-1 to +1 = Moderate\n"
+        )
+
+        report_file.write(
+            "Z > +1   = High\n\n"
+        )
+
+        report_file.write(
+            "Alert levels:\n"
+        )
+
+        report_file.write(
+            "Low wellbeing      = High alert\n"
+        )
+
+        report_file.write(
+            "Moderate wellbeing = Moderate alert\n"
+        )
+
+        report_file.write(
+            "High wellbeing     = Low alert\n\n"
+        )
+
+        report_file.write(
+            "=" * 80
+            + "\n\n"
+        )
+
+        for section in report_sections:
+
+            report_file.write(
+                f"Participant: "
+                f"{section['participant_id']}\n"
+            )
+
+            report_file.write(
+                f"Target date: "
+                f"{section['target_date'].date()}\n"
+            )
+
+            report_file.write(
+                f"Predicted wellbeing: "
+                f"{section['predicted_wellbeing']:.4f}\n"
+            )
+
+            if pd.notna(
+                section["predicted_z"]
+            ):
+
+                report_file.write(
+                    f"Wellbeing Z-score: "
+                    f"{section['predicted_z']:.4f}\n"
+                )
+
+            else:
+
+                report_file.write(
+                    "Wellbeing Z-score: "
+                    "Insufficient history\n"
+                )
+
+            report_file.write(
+                f"Status: "
+                f"{section['status']}\n"
+            )
+
+            report_file.write(
+                f"Alert level: "
+                f"{section['alert']}\n"
+            )
+
+            if section["increasing"]:
+
+                report_file.write(
+                    "Increasing behaviors: "
+                    + ", ".join(
+                        section["increasing"]
+                    )
+                    + "\n"
+                )
+
+            if section["decreasing"]:
+
+                report_file.write(
+                    "Decreasing behaviors: "
+                    + ", ".join(
+                        section["decreasing"]
+                    )
+                    + "\n"
+                )
+
+            if section["stable"]:
+
+                report_file.write(
+                    "Stable behaviors: "
+                    + ", ".join(
+                        section["stable"]
+                    )
+                    + "\n"
+                )
+
+            if section["changes"]:
+
+                report_file.write(
+                    "Top behavioral changes:\n"
+                )
+
+                for change in section["changes"]:
+
+                    report_file.write(
+                        f"  - {change}\n"
+                    )
+
+            report_file.write("\n")
+            report_file.write(
+                "-" * 80
+                + "\n\n"
+            )
 
     print(
-        f"Final predictions: "
-        f"{len(full_df)}"
+        f"Predictions processed: "
+        f"{len(results_df)}"
     )
 
-    if not full_df.empty:
+    print(
+        f"Saved:\n{SHORT_OUTPUT}"
+    )
 
-        print()
+    print(
+        f"Saved:\n{FULL_OUTPUT}"
+    )
 
-        print(
-            "Wellbeing status counts:"
-        )
-
-        print(
-            full_df[
-                "wellbeing_status"
-            ]
-            .value_counts()
-            .to_string()
-        )
-
-        print()
-
-        print(
-            "Alert level counts:"
-        )
-
-        print(
-            full_df[
-                "alert_level"
-            ]
-            .value_counts()
-            .to_string()
-        )
+    print(
+        f"Saved:\n{REPORT_OUTPUT}"
+    )
 
     print()
-    print(
-        f"Short output:\n"
-        f"  {SHORT_OUTPUT_FILE}"
-    )
 
-    print()
-    print(
-        f"Full output:\n"
-        f"  {FULL_OUTPUT_FILE}"
-    )
-
-    print()
-    print(
-        f"Research report:\n"
-        f"  {TEXT_REPORT_FILE}"
-    )
-
-
-# ============================================================
-# 16. RUN
-# ============================================================
 
 if __name__ == "__main__":
     main()
