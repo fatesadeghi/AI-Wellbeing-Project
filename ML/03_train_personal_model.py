@@ -98,6 +98,20 @@ def build_model():
     )
 
 
+def get_person_label(participant_id):
+
+    digits = "".join(
+        character
+        for character in str(participant_id)
+        if character.isdigit()
+    )
+
+    if digits:
+        return f"Person {int(digits)}"
+
+    return str(participant_id)
+
+
 def main():
 
     print()
@@ -235,10 +249,14 @@ def main():
 
     for participant in participants:
 
+        person_label = get_person_label(
+            participant
+        )
+
         print("-" * 80)
         print(
             f"Participant: "
-            f"{participant}"
+            f"{person_label}"
         )
 
         participant_features = (
@@ -316,6 +334,8 @@ def main():
                     {
                         "participant_id":
                             participant,
+                        "person":
+                            person_label,
                         "target_date":
                             target_date,
                         "actual_wellbeing":
@@ -407,6 +427,8 @@ def main():
                     {
                         "participant_id":
                             participant,
+                        "person":
+                            person_label,
                         "target_date":
                             target_date,
                         "actual_wellbeing":
@@ -463,6 +485,8 @@ def main():
                 {
                     "participant_id":
                         participant,
+                    "person":
+                        person_label,
                     "target_date":
                         target_date,
                     "actual_wellbeing":
@@ -482,6 +506,8 @@ def main():
             {
                 "participant_id":
                     participant,
+                "person":
+                    person_label,
                 "total_prediction_dates":
                     len(participant_features),
                 "predictions_created":
