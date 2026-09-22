@@ -4,14 +4,9 @@ import numpy as np
 import pandas as pd
 
 
-# ============================================================
-# 1. PATHS
-# ============================================================
-
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 
 DATA_DIR = PROJECT_ROOT / "data" / "pmdata"
-
 RESULTS_DIR = PROJECT_ROOT / "ML" / "Results"
 
 RESULTS_DIR.mkdir(
@@ -19,10 +14,6 @@ RESULTS_DIR.mkdir(
     exist_ok=True,
 )
 
-
-# ============================================================
-# 2. VARIABLES
-# ============================================================
 
 WELLBEING_VARIABLES = [
     "fatigue",
@@ -32,74 +23,37 @@ WELLBEING_VARIABLES = [
     "stress",
 ]
 
-
-# Variables where higher values indicate worse wellbeing.
 REVERSE_VARIABLES = [
     "fatigue",
     "stress",
 ]
 
 
-# Equal weighting across the five wellbeing components.
-N_COMPONENTS = len(WELLBEING_VARIABLES)
-
-
-# ============================================================
-# 3. FILE DISCOVERY
-# ============================================================
-
 def find_participant_files():
-    """
-    Find participant CSV files inside data/pmdata.
-    """
 
     if not DATA_DIR.exists():
-
         raise FileNotFoundError(
             f"Data directory not found:\n{DATA_DIR}"
         )
 
-    participant_files = sorted(
+    files = sorted(
         DATA_DIR.glob("*.csv")
     )
 
-    if not participant_files:
-
+    if not files:
         raise FileNotFoundError(
             f"No participant CSV files found in:\n{DATA_DIR}"
         )
 
-    return participant_files
+    return files
 
-
-# ============================================================
-# 4. PARTICIPANT ID
-# ============================================================
 
 def get_participant_id(file_path):
-    """
-    Extract participant ID from the CSV filename.
-
-    Example:
-        p01.csv -> p01
-    """
 
     return file_path.stem
 
 
-# ============================================================
-# 5. Z-SCORE
-# ============================================================
-
 def calculate_z_score(series):
-    """
-    Calculate a participant-specific z-score.
-
-    Missing values remain missing.
-
-    If the participant has zero variance, the standardized
-    values are set to 0 for the available observations.
-    """
 
     numeric_series = pd.to_numeric(
         series,
@@ -107,7 +61,6 @@ def calculate_z_score(series):
     )
 
     mean_value = numeric_series.mean()
-
     std_value = numeric_series.std(
         ddof=0
     )
@@ -131,17 +84,7 @@ def calculate_z_score(series):
     ) / std_value
 
 
-# ============================================================
-# 6. PROCESS ONE PARTICIPANT
-# ============================================================
-
 def process_participant(file_path):
-    """
-    Process one participant file and return:
-
-        wellbeing dataframe
-        processing information
-    """
 
     participant_id = get_participant_id(
         file_path
@@ -150,10 +93,6 @@ def process_participant(file_path):
     df = pd.read_csv(
         file_path
     )
-
-    # --------------------------------------------------------
-    # Find date column
-    # --------------------------------------------------------
 
     date_candidates = [
         "date",
@@ -169,19 +108,14 @@ def process_participant(file_path):
     for candidate in date_candidates:
 
         if candidate in df.columns:
-
             date_column = candidate
             break
 
     if date_column is None:
-
         raise ValueError(
-            f"No date column found in {file_path.name}"
+            f"No date column found in "
+            f"{file_path.name}"
         )
-
-    # --------------------------------------------------------
-    # Check wellbeing columns
-    # --------------------------------------------------------
 
     missing_columns = [
         column
@@ -190,35 +124,26 @@ def process_participant(file_path):
     ]
 
     if missing_columns:
-
         raise ValueError(
             f"Missing wellbeing columns in "
             f"{file_path.name}: "
             f"{missing_columns}"
         )
 
-    # --------------------------------------------------------
-    # Prepare dataframe
-    # --------------------------------------------------------
-
-    df[date_column] = pd.to_datetime(
+    df["date"] = pd.to_datetime(
         df[date_column],
         errors="coerce",
     )
 
     df = df.dropna(
-        subset=[date_column]
+        subset=["date"]
     ).copy()
 
     df = df.sort_values(
-        date_column
+        "date"
     ).reset_index(
         drop=True
     )
-
-    # --------------------------------------------------------
-    # Convert wellbeing variables to numeric
-    # --------------------------------------------------------
 
     for column in WELLBEING_VARIABLES:
 
@@ -227,20 +152,12 @@ def process_participant(file_path):
             errors="coerce",
         )
 
-    # --------------------------------------------------------
-    # Create output dataframe
-    # --------------------------------------------------------
-
     output = pd.DataFrame(
         {
             "participant_id": participant_id,
-            "date": df[date_column],
+            "date": df["date"],
         }
     )
-
-    # --------------------------------------------------------
-    # Calculate participant-specific z-scores
-    # --------------------------------------------------------
 
     component_z_scores = []
 
@@ -250,10 +167,7 @@ def process_participant(file_path):
             df[variable]
         )
 
-        # Reverse variables where higher values
-        # represent worse wellbeing.
         if variable in REVERSE_VARIABLES:
-
             z_score = -z_score
 
         output[
@@ -264,52 +178,44 @@ def process_participant(file_path):
             z_score
         )
 
-    # --------------------------------------------------------
-    # Calculate Wellbeing Index
-    # --------------------------------------------------------
-
     component_matrix = pd.concat(
         component_z_scores,
         axis=1,
     )
 
-    output[
-        "Wellbeing_Index"
-    ] = component_matrix.mean(
-        axis=1,
-        skipna=False,
+    output["Wellbeing_Index"] = (
+        component_matrix.mean(
+            axis=1,
+            skipna=False,
+        )
     )
-
-    # --------------------------------------------------------
-    # Processing information
-    # --------------------------------------------------------
 
     total_days = len(output)
 
     valid_index_days = (
-        output["Wellbeing_Index"]
-        .notna()
-        .sum()
+        output[
+            "Wellbeing_Index"
+        ].notna().sum()
     )
 
     processing_info = {
         "participant_id": participant_id,
         "source_file": file_path.name,
         "total_rows": total_days,
-        "valid_wellbeing_index_rows": int(
-            valid_index_days
-        ),
-        "missing_wellbeing_index_rows": int(
-            total_days - valid_index_days
-        ),
+        "valid_wellbeing_index_rows":
+            int(valid_index_days),
+        "missing_wellbeing_index_rows":
+            int(
+                total_days
+                - valid_index_days
+            ),
     }
 
-    return output, processing_info
+    return (
+        output,
+        processing_info,
+    )
 
-
-# ============================================================
-# 7. MAIN
-# ============================================================
 
 def main():
 
@@ -320,16 +226,8 @@ def main():
     print()
 
     print(
-        f"Project root:\n{PROJECT_ROOT}"
-    )
-
-    print()
-
-    print(
         f"Data directory:\n{DATA_DIR}"
     )
-
-    print()
 
     print(
         f"Results directory:\n{RESULTS_DIR}"
@@ -337,11 +235,9 @@ def main():
 
     print()
 
-    # --------------------------------------------------------
-    # Find participant files
-    # --------------------------------------------------------
-
-    participant_files = find_participant_files()
+    participant_files = (
+        find_participant_files()
+    )
 
     print(
         f"Participant files found: "
@@ -350,21 +246,20 @@ def main():
 
     print()
 
-    # --------------------------------------------------------
-    # Process participants
-    # --------------------------------------------------------
-
     all_results = []
     processing_log = []
 
     for file_path in participant_files:
 
-        participant_id = get_participant_id(
-            file_path
+        participant_id = (
+            get_participant_id(
+                file_path
+            )
         )
 
         print(
-            f"Processing: {participant_id}"
+            f"Processing: "
+            f"{participant_id}"
         )
 
         try:
@@ -401,50 +296,46 @@ def main():
 
             processing_log.append(
                 {
-                    "participant_id": participant_id,
-                    "source_file": file_path.name,
+                    "participant_id":
+                        participant_id,
+                    "source_file":
+                        file_path.name,
                     "total_rows": 0,
-                    "valid_wellbeing_index_rows": 0,
-                    "missing_wellbeing_index_rows": 0,
+                    "valid_wellbeing_index_rows":
+                        0,
+                    "missing_wellbeing_index_rows":
+                        0,
                     "error": str(error),
                 }
             )
 
-    # --------------------------------------------------------
-    # Check results
-    # --------------------------------------------------------
-
     if not all_results:
-
         raise RuntimeError(
-            "No participant data were successfully processed."
+            "No participant data were "
+            "successfully processed."
         )
-
-    # --------------------------------------------------------
-    # Combine all participants
-    # --------------------------------------------------------
 
     wellbeing_index = pd.concat(
         all_results,
         ignore_index=True,
     )
 
-    wellbeing_index = wellbeing_index.sort_values(
-        [
-            "participant_id",
-            "date",
-        ]
-    ).reset_index(
-        drop=True
+    wellbeing_index = (
+        wellbeing_index.sort_values(
+            [
+                "participant_id",
+                "date",
+            ]
+        ).reset_index(
+            drop=True
+        )
     )
 
-    processing_log_df = pd.DataFrame(
-        processing_log
+    processing_log_df = (
+        pd.DataFrame(
+            processing_log
+        )
     )
-
-    # --------------------------------------------------------
-    # Output paths
-    # --------------------------------------------------------
 
     wellbeing_output = (
         RESULTS_DIR
@@ -456,10 +347,6 @@ def main():
         / "wellbeing_index_processing_log.csv"
     )
 
-    # --------------------------------------------------------
-    # Save outputs
-    # --------------------------------------------------------
-
     wellbeing_index.to_csv(
         wellbeing_output,
         index=False,
@@ -469,10 +356,6 @@ def main():
         processing_output,
         index=False,
     )
-
-    # --------------------------------------------------------
-    # Summary
-    # --------------------------------------------------------
 
     print()
     print("=" * 80)
@@ -501,18 +384,12 @@ def main():
         f"Saved:\n{wellbeing_output}"
     )
 
-    print()
-
     print(
         f"Saved:\n{processing_output}"
     )
 
     print()
 
-
-# ============================================================
-# ENTRY POINT
-# ============================================================
 
 if __name__ == "__main__":
     main()
