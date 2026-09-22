@@ -4,15 +4,11 @@ import numpy as np
 import pandas as pd
 
 
-# ============================================================
-# 1. PATHS
-# ============================================================
-
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 
 DATA_DIR = PROJECT_ROOT / "data" / "pmdata"
-
-RESULTS_DIR = PROJECT_ROOT / "ML" / "Results"
+ML_DIR = PROJECT_ROOT / "ML"
+RESULTS_DIR = ML_DIR / "Results"
 
 RESULTS_DIR.mkdir(
     parents=True,
@@ -20,140 +16,120 @@ RESULTS_DIR.mkdir(
 )
 
 
-# ============================================================
-# 2. VARIABLES
-# ============================================================
-
-WELLBEING_VARIABLES = [
-    "fatigue",
-    "mood",
-    "readiness",
-    "sleep_quality",
-    "stress",
+BEHAVIOR_VARIABLES = [
+    "Steps",
+    "Exercise_Count",
+    "Exercise_Duration",
+    "Exercise_Distance",
+    "Exercise_Calories",
+    "Exercise_Avg_HR",
+    "Sleep_Hours",
+    "Sleep_Duration_Score",
+    "Deep_Sleep_Minutes",
+    "Sleep_Restlessness",
+    "Sleep_Composition",
+    "Sleep_Revitalization",
+    "Sleep_Score",
 ]
 
-
-# Variables where higher values indicate worse wellbeing.
-REVERSE_VARIABLES = [
-    "fatigue",
-    "stress",
-]
-
-
-# Equal weighting across the five wellbeing components.
-N_COMPONENTS = len(WELLBEING_VARIABLES)
-
-
-# ============================================================
-# 3. FILE DISCOVERY
-# ============================================================
 
 def find_participant_files():
-    """
-    Find participant CSV files inside data/pmdata.
-    """
-
     if not DATA_DIR.exists():
-
         raise FileNotFoundError(
             f"Data directory not found:\n{DATA_DIR}"
         )
 
-    participant_files = sorted(
-        DATA_DIR.glob("*.csv")
-    )
+    files = sorted(DATA_DIR.glob("*.csv"))
 
-    if not participant_files:
-
+    if not files:
         raise FileNotFoundError(
             f"No participant CSV files found in:\n{DATA_DIR}"
         )
 
-    return participant_files
+    return files
 
 
-# ============================================================
-# 4. PARTICIPANT ID
-# ============================================================
+def calculate_slope(dates, values):
+    valid = pd.notna(values)
 
-def get_participant_id(file_path):
-    """
-    Extract participant ID from the CSV filename.
+    dates = dates[valid]
+    values = values[valid]
 
-    Example:
-        p01.csv -> p01
-    """
+    if len(values) < 2:
+        return np.nan
 
-    return file_path.stem
+    day_numbers = (
+        dates - dates.min()
+    ).dt.total_seconds() / 86400.0
+
+    if day_numbers.nunique() < 2:
+        return np.nan
+
+    return np.polyfit(
+        day_numbers.to_numpy(),
+        values.to_numpy(),
+        1,
+    )[0]
 
 
-# ============================================================
-# 5. Z-SCORE
-# ============================================================
+def calculate_change(values):
+    values = values.dropna()
 
-def calculate_z_score(series):
-    """
-    Calculate a participant-specific z-score.
+    if len(values) < 2:
+        return np.nan
 
-    Missing values remain missing.
+    return values.iloc[-1] - values.iloc[0]
 
-    If the participant has zero variance, the standardized
-    values are set to 0 for the available observations.
-    """
 
-    numeric_series = pd.to_numeric(
-        series,
-        errors="coerce",
+def build_features_for_target_date(
+    participant_df,
+    target_date,
+):
+    history_start = (
+        target_date
+        - pd.Timedelta(days=7)
     )
 
-    mean_value = numeric_series.mean()
-
-    std_value = numeric_series.std(
-        ddof=0
+    history_end = (
+        target_date
+        - pd.Timedelta(days=1)
     )
 
-    if pd.isna(std_value) or std_value == 0:
+    history = participant_df[
+        (participant_df["date"] >= history_start)
+        & (participant_df["date"] <= history_end)
+    ].copy()
 
-        result = pd.Series(
-            np.nan,
-            index=series.index,
-            dtype=float,
+    features = {}
+
+    for variable in BEHAVIOR_VARIABLES:
+
+        values = pd.to_numeric(
+            history[variable],
+            errors="coerce",
         )
 
-        result.loc[
-            numeric_series.notna()
-        ] = 0.0
+        features[
+            f"{variable}_7d_slope"
+        ] = calculate_slope(
+            history["date"],
+            values,
+        )
 
-        return result
+        features[
+            f"{variable}_7d_change"
+        ] = calculate_change(
+            values
+        )
 
-    return (
-        numeric_series - mean_value
-    ) / std_value
+    return features
 
-
-# ============================================================
-# 6. PROCESS ONE PARTICIPANT
-# ============================================================
 
 def process_participant(file_path):
-    """
-    Process one participant file and return:
 
-        wellbeing dataframe
-        processing information
-    """
+    participant_id = file_path.stem
 
-    participant_id = get_participant_id(
-        file_path
-    )
-
-    df = pd.read_csv(
-        file_path
-    )
-
-    # --------------------------------------------------------
-    # Find date column
-    # --------------------------------------------------------
+    df = pd.read_csv(file_path)
 
     date_candidates = [
         "date",
@@ -167,179 +143,111 @@ def process_participant(file_path):
     date_column = None
 
     for candidate in date_candidates:
-
         if candidate in df.columns:
-
             date_column = candidate
             break
 
     if date_column is None:
-
         raise ValueError(
             f"No date column found in {file_path.name}"
         )
 
-    # --------------------------------------------------------
-    # Check wellbeing columns
-    # --------------------------------------------------------
-
     missing_columns = [
-        column
-        for column in WELLBEING_VARIABLES
-        if column not in df.columns
+        variable
+        for variable in BEHAVIOR_VARIABLES
+        if variable not in df.columns
     ]
 
     if missing_columns:
-
         raise ValueError(
-            f"Missing wellbeing columns in "
-            f"{file_path.name}: "
-            f"{missing_columns}"
+            f"Missing behavioral columns in "
+            f"{file_path.name}: {missing_columns}"
         )
 
-    # --------------------------------------------------------
-    # Prepare dataframe
-    # --------------------------------------------------------
-
-    df[date_column] = pd.to_datetime(
+    df["date"] = pd.to_datetime(
         df[date_column],
         errors="coerce",
     )
 
     df = df.dropna(
-        subset=[date_column]
+        subset=["date"]
     ).copy()
 
     df = df.sort_values(
-        date_column
+        "date"
     ).reset_index(
         drop=True
     )
 
-    # --------------------------------------------------------
-    # Convert wellbeing variables to numeric
-    # --------------------------------------------------------
-
-    for column in WELLBEING_VARIABLES:
-
-        df[column] = pd.to_numeric(
-            df[column],
+    for variable in BEHAVIOR_VARIABLES:
+        df[variable] = pd.to_numeric(
+            df[variable],
             errors="coerce",
         )
 
-    # --------------------------------------------------------
-    # Create output dataframe
-    # --------------------------------------------------------
-
-    output = pd.DataFrame(
-        {
+    if df.empty:
+        return [], {
             "participant_id": participant_id,
-            "date": df[date_column],
+            "source_file": file_path.name,
+            "target_dates": 0,
+            "features_created": 0,
         }
+
+    first_date = df["date"].min()
+
+    target_dates = pd.date_range(
+        start=first_date + pd.Timedelta(days=7),
+        end=df["date"].max(),
+        freq="D",
     )
 
-    # --------------------------------------------------------
-    # Calculate participant-specific z-scores
-    # --------------------------------------------------------
+    participant_results = []
 
-    component_z_scores = []
+    for target_date in target_dates:
 
-    for variable in WELLBEING_VARIABLES:
-
-        z_score = calculate_z_score(
-            df[variable]
+        features = build_features_for_target_date(
+            df,
+            target_date,
         )
 
-        # Reverse variables where higher values
-        # represent worse wellbeing.
-        if variable in REVERSE_VARIABLES:
+        row = {
+            "participant_id": participant_id,
+            "target_date": target_date,
+        }
 
-            z_score = -z_score
+        row.update(features)
 
-        output[
-            f"{variable}_z"
-        ] = z_score
-
-        component_z_scores.append(
-            z_score
-        )
-
-    # --------------------------------------------------------
-    # Calculate Wellbeing Index
-    # --------------------------------------------------------
-
-    component_matrix = pd.concat(
-        component_z_scores,
-        axis=1,
-    )
-
-    output[
-        "Wellbeing_Index"
-    ] = component_matrix.mean(
-        axis=1,
-        skipna=False,
-    )
-
-    # --------------------------------------------------------
-    # Processing information
-    # --------------------------------------------------------
-
-    total_days = len(output)
-
-    valid_index_days = (
-        output["Wellbeing_Index"]
-        .notna()
-        .sum()
-    )
+        participant_results.append(row)
 
     processing_info = {
         "participant_id": participant_id,
         "source_file": file_path.name,
-        "total_rows": total_days,
-        "valid_wellbeing_index_rows": int(
-            valid_index_days
-        ),
-        "missing_wellbeing_index_rows": int(
-            total_days - valid_index_days
+        "target_dates": len(target_dates),
+        "features_created": len(
+            participant_results
         ),
     }
 
-    return output, processing_info
+    return participant_results, processing_info
 
-
-# ============================================================
-# 7. MAIN
-# ============================================================
 
 def main():
 
     print()
     print("=" * 80)
-    print("BUILD PARTICIPANT-SPECIFIC WELLBEING INDEX")
+    print("BUILD 7-DAY BEHAVIORAL FEATURES")
     print("=" * 80)
-    print()
-
-    print(
-        f"Project root:\n{PROJECT_ROOT}"
-    )
-
     print()
 
     print(
         f"Data directory:\n{DATA_DIR}"
     )
 
-    print()
-
     print(
         f"Results directory:\n{RESULTS_DIR}"
     )
 
     print()
-
-    # --------------------------------------------------------
-    # Find participant files
-    # --------------------------------------------------------
 
     participant_files = find_participant_files()
 
@@ -350,18 +258,12 @@ def main():
 
     print()
 
-    # --------------------------------------------------------
-    # Process participants
-    # --------------------------------------------------------
-
-    all_results = []
+    all_features = []
     processing_log = []
 
     for file_path in participant_files:
 
-        participant_id = get_participant_id(
-            file_path
-        )
+        participant_id = file_path.stem
 
         print(
             f"Processing: {participant_id}"
@@ -369,14 +271,12 @@ def main():
 
         try:
 
-            participant_result, info = (
-                process_participant(
-                    file_path
-                )
+            features, info = process_participant(
+                file_path
             )
 
-            all_results.append(
-                participant_result
+            all_features.extend(
+                features
             )
 
             processing_log.append(
@@ -384,13 +284,8 @@ def main():
             )
 
             print(
-                f"  Rows: "
-                f"{info['total_rows']}"
-            )
-
-            print(
-                f"  Valid index rows: "
-                f"{info['valid_wellbeing_index_rows']}"
+                f"  Target dates: "
+                f"{info['target_dates']}"
             )
 
         except Exception as error:
@@ -403,36 +298,25 @@ def main():
                 {
                     "participant_id": participant_id,
                     "source_file": file_path.name,
-                    "total_rows": 0,
-                    "valid_wellbeing_index_rows": 0,
-                    "missing_wellbeing_index_rows": 0,
+                    "target_dates": 0,
+                    "features_created": 0,
                     "error": str(error),
                 }
             )
 
-    # --------------------------------------------------------
-    # Check results
-    # --------------------------------------------------------
-
-    if not all_results:
-
+    if not all_features:
         raise RuntimeError(
-            "No participant data were successfully processed."
+            "No 7-day behavioral features were created."
         )
 
-    # --------------------------------------------------------
-    # Combine all participants
-    # --------------------------------------------------------
-
-    wellbeing_index = pd.concat(
-        all_results,
-        ignore_index=True,
+    features_df = pd.DataFrame(
+        all_features
     )
 
-    wellbeing_index = wellbeing_index.sort_values(
+    features_df = features_df.sort_values(
         [
             "participant_id",
-            "date",
+            "target_date",
         ]
     ).reset_index(
         drop=True
@@ -442,77 +326,59 @@ def main():
         processing_log
     )
 
-    # --------------------------------------------------------
-    # Output paths
-    # --------------------------------------------------------
-
-    wellbeing_output = (
+    features_output = (
         RESULTS_DIR
-        / "wellbeing_index.csv"
+        / "behavior_7day_features.csv"
     )
 
-    processing_output = (
+    log_output = (
         RESULTS_DIR
-        / "wellbeing_index_processing_log.csv"
+        / "behavior_7day_feature_processing_log.csv"
     )
 
-    # --------------------------------------------------------
-    # Save outputs
-    # --------------------------------------------------------
-
-    wellbeing_index.to_csv(
-        wellbeing_output,
+    features_df.to_csv(
+        features_output,
         index=False,
     )
 
     processing_log_df.to_csv(
-        processing_output,
+        log_output,
         index=False,
     )
 
-    # --------------------------------------------------------
-    # Summary
-    # --------------------------------------------------------
-
     print()
     print("=" * 80)
-    print("WELLBEING INDEX COMPLETED")
+    print("7-DAY FEATURES COMPLETED")
     print("=" * 80)
     print()
 
     print(
         f"Participants processed: "
-        f"{len(all_results)}"
+        f"{len(processing_log_df)}"
     )
 
     print(
-        f"Total output rows: "
-        f"{len(wellbeing_index)}"
+        f"Feature rows created: "
+        f"{len(features_df)}"
     )
 
     print(
-        f"Valid Wellbeing Index rows: "
-        f"{wellbeing_index['Wellbeing_Index'].notna().sum()}"
+        f"Feature columns: "
+        f"{len(features_df.columns)}"
     )
 
     print()
 
     print(
-        f"Saved:\n{wellbeing_output}"
+        f"Saved:\n{features_output}"
     )
-
-    print()
 
     print(
-        f"Saved:\n{processing_output}"
+        f"Saved:\n{log_output}"
     )
 
     print()
 
-
-# ============================================================
-# ENTRY POINT
-# ============================================================
 
 if __name__ == "__main__":
     main()
