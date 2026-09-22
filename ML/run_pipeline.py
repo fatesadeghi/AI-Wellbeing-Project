@@ -1,30 +1,3 @@
-#run_pipeline.py
-
-Purpose
--------
-Run the complete personalized wellbeing ML pipeline
-in the correct chronological order.
-
-Pipeline
---------
-01_build_wellbeing_index.py
-        ↓
-02_build_7day_features.py
-        ↓
-03_train_personal_model.py
-        ↓
-04_predict_and_report.py
-
-Usage
------
-From the project root:
-
-    python ML/run_pipeline.py
-
-The pipeline stops immediately if any stage fails.
-This prevents incomplete or invalid downstream results.
-"""
-
 from pathlib import Path
 import subprocess
 import sys
