@@ -1,0 +1,17 @@
+participant_id,source_file,total_rows,valid_wellbeing_index_rows,missing_wellbeing_index_rows
+p01_daily_merged,p01_daily_merged.csv,138,138,0
+p02_daily_merged,p02_daily_merged.csv,99,99,0
+p03_daily_merged,p03_daily_merged.csv,82,82,0
+p04_daily_merged,p04_daily_merged.csv,145,145,0
+p05_daily_merged,p05_daily_merged.csv,137,137,0
+p06_daily_merged,p06_daily_merged.csv,147,147,0
+p07_daily_merged,p07_daily_merged.csv,133,133,0
+p08_daily_merged,p08_daily_merged.csv,104,104,0
+p09_daily_merged,p09_daily_merged.csv,102,102,0
+p10_daily_merged,p10_daily_merged.csv,96,96,0
+p11_daily_merged,p11_daily_merged.csv,107,107,0
+p12_daily_merged,p12_daily_merged.csv,83,83,0
+p13_daily_merged,p13_daily_merged.csv,72,72,0
+p14_daily_merged,p14_daily_merged.csv,125,125,0
+p15_daily_merged,p15_daily_merged.csv,95,95,0
+p16_daily_merged,p16_daily_merged.csv,82,82,0
