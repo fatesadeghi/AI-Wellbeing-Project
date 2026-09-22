@@ -1,6 +1,8 @@
 from pathlib import Path
 
+import numpy as np
 import pandas as pd
+
 from sklearn.ensemble import RandomForestRegressor
 from sklearn.impute import SimpleImputer
 from sklearn.pipeline import Pipeline
@@ -59,14 +61,15 @@ BEHAVIOR_VARIABLES = [
 ]
 
 
-FEATURE_COLUMNS = [
-    f"{variable}_{feature_type}"
-    for variable in BEHAVIOR_VARIABLES
-    for feature_type in [
-        "7d_slope",
-        "7d_change",
-    ]
-]
+FEATURE_COLUMNS = []
+
+for variable in BEHAVIOR_VARIABLES:
+    FEATURE_COLUMNS.append(
+        f"{variable}_7d_slope"
+    )
+    FEATURE_COLUMNS.append(
+        f"{variable}_7d_change"
+    )
 
 
 def build_model():
@@ -75,11 +78,12 @@ def build_model():
             (
                 "imputer",
                 SimpleImputer(
-                    strategy="median"
+                    strategy="median",
+                    keep_empty_features=True,
                 ),
             ),
             (
-                "random_forest",
+                "model",
                 RandomForestRegressor(
                     n_estimators=N_ESTIMATORS,
                     random_state=RANDOM_STATE,
@@ -117,8 +121,35 @@ def main():
         WELLBEING_FILE
     )
 
-    features_df["target_date"] = pd.to_datetime(
-        features_df["target_date"],
+    if "participant" not in features_df.columns:
+        raise ValueError(
+            "Feature file must contain 'participant'."
+        )
+
+    if "date" not in features_df.columns:
+        raise ValueError(
+            "Feature file must contain 'date'."
+        )
+
+    if "participant_id" not in wellbeing_df.columns:
+        raise ValueError(
+            "Wellbeing file must contain "
+            "'participant_id'."
+        )
+
+    if "date" not in wellbeing_df.columns:
+        raise ValueError(
+            "Wellbeing file must contain 'date'."
+        )
+
+    if "Wellbeing_Index" not in wellbeing_df.columns:
+        raise ValueError(
+            "Wellbeing file must contain "
+            "'Wellbeing_Index'."
+        )
+
+    features_df["date"] = pd.to_datetime(
+        features_df["date"],
         errors="coerce",
     )
 
@@ -128,171 +159,239 @@ def main():
     )
 
     features_df = features_df.dropna(
-        subset=[
-            "participant_id",
-            "target_date",
-        ]
+        subset=["date"]
     ).copy()
 
     wellbeing_df = wellbeing_df.dropna(
-        subset=[
+        subset=["date"]
+    ).copy()
+
+    for column in FEATURE_COLUMNS:
+
+        if column not in features_df.columns:
+            features_df[column] = np.nan
+
+        features_df[column] = pd.to_numeric(
+            features_df[column],
+            errors="coerce",
+        )
+
+    wellbeing_df["Wellbeing_Index"] = pd.to_numeric(
+        wellbeing_df["Wellbeing_Index"],
+        errors="coerce",
+    )
+
+    features_df = features_df.sort_values(
+        [
+            "participant",
+            "date",
+        ]
+    ).reset_index(drop=True)
+
+    wellbeing_df = wellbeing_df.sort_values(
+        [
             "participant_id",
             "date",
         ]
-    ).copy()
+    ).reset_index(drop=True)
 
-    missing_features = [
-        column
-        for column in FEATURE_COLUMNS
-        if column not in features_df.columns
-    ]
-
-    if missing_features:
-        raise ValueError(
-            f"Missing feature columns:\n"
-            f"{missing_features}"
-        )
-
-    if "Wellbeing_Index" not in wellbeing_df.columns:
-        raise ValueError(
-            "Wellbeing_Index column not found."
-        )
-
-    merged_df = features_df.merge(
-        wellbeing_df[
-            [
-                "participant_id",
-                "date",
-                "Wellbeing_Index",
-            ]
-        ],
-        left_on=[
-            "participant_id",
-            "target_date",
-        ],
-        right_on=[
-            "participant_id",
-            "date",
-        ],
-        how="left",
-    )
-
-    merged_df = merged_df.drop(
-        columns=["date"]
-    )
-
-    predictions = []
-    summaries = []
-
-    participant_ids = sorted(
-        merged_df["participant_id"]
-        .dropna()
-        .unique()
+    participants = sorted(
+        features_df["participant"].unique()
     )
 
     print(
-        f"Participants found: "
-        f"{len(participant_ids)}"
+        f"Participants found: {len(participants)}"
+    )
+
+    print(
+        f"Feature columns: {len(FEATURE_COLUMNS)}"
     )
 
     print()
 
-    for participant_id in participant_ids:
+    prediction_rows = []
+    summary_rows = []
 
-        participant_data = (
-            merged_df[
-                merged_df["participant_id"]
-                == participant_id
+    for participant in participants:
+
+        print("-" * 80)
+        print(
+            f"Participant: {participant}"
+        )
+
+        participant_features = (
+            features_df[
+                features_df["participant"]
+                == participant
             ]
-            .sort_values("target_date")
+            .sort_values("date")
             .reset_index(drop=True)
         )
 
-        participant_predictions = 0
-        participant_insufficient = 0
-        participant_missing = 0
-
-        for _, current_row in participant_data.iterrows():
-
-            target_date = current_row[
-                "target_date"
+        participant_wellbeing = (
+            wellbeing_df[
+                wellbeing_df["participant_id"]
+                == participant
             ]
+            .sort_values("date")
+            .reset_index(drop=True)
+        )
 
-            historical = participant_data[
-                participant_data["target_date"]
-                < target_date
-            ].copy()
+        if participant_wellbeing.empty:
+            print(
+                "  No wellbeing data"
+            )
 
-            historical = historical[
-                historical["Wellbeing_Index"]
-                .notna()
-            ].copy()
+            continue
 
-            historical = historical[
-                historical[
+        predicted_count = 0
+        insufficient_count = 0
+        missing_feature_count = 0
+
+        for _, target_row in (
+            participant_features.iterrows()
+        ):
+
+            target_date = target_row["date"]
+
+            target_features = (
+                target_row[
                     FEATURE_COLUMNS
-                ].notna().any(axis=1)
-            ].copy()
+                ]
+                .astype(float)
+            )
 
-            if len(historical) < MIN_TRAINING_SAMPLES:
+            if target_features.notna().sum() == 0:
 
-                predictions.append(
+                missing_feature_count += 1
+
+                prediction_rows.append(
                     {
-                        "participant_id": participant_id,
-                        "target_date": target_date,
-                        "actual_wellbeing": current_row[
-                            "Wellbeing_Index"
-                        ],
-                        "training_samples": len(
-                            historical
-                        ),
-                        "predicted_wellbeing": None,
+                        "participant": participant,
+                        "date": target_date,
+                        "actual_wellbeing": np.nan,
+                        "predicted_wellbeing": np.nan,
+                        "training_samples": 0,
                         "prediction_status":
-                            "Insufficient_History",
+                            "No_Features",
                     }
                 )
 
-                participant_insufficient += 1
-
                 continue
 
-            target_features = current_row[
-                FEATURE_COLUMNS
-            ].to_frame().T
+            training_features = (
+                participant_features[
+                    participant_features["date"]
+                    < target_date
+                ]
+                .copy()
+            )
 
-            if target_features.isna().all(
-                axis=1
-            ).iloc[0]:
+            training_features = training_features.merge(
+                participant_wellbeing[
+                    [
+                        "date",
+                        "Wellbeing_Index",
+                    ]
+                ],
+                on="date",
+                how="inner",
+            )
 
-                predictions.append(
-                    {
-                        "participant_id": participant_id,
-                        "target_date": target_date,
-                        "actual_wellbeing": current_row[
+            training_features = (
+                training_features[
+                    training_features[
+                        "Wellbeing_Index"
+                    ].notna()
+                ]
+            )
+
+            if len(training_features) < MIN_TRAINING_SAMPLES:
+
+                insufficient_count += 1
+
+                actual_rows = participant_wellbeing[
+                    participant_wellbeing["date"]
+                    == target_date
+                ]
+
+                actual_value = np.nan
+
+                if not actual_rows.empty:
+                    actual_value = (
+                        actual_rows[
                             "Wellbeing_Index"
-                        ],
-                        "training_samples": len(
-                            historical
-                        ),
-                        "predicted_wellbeing": None,
+                        ].iloc[0]
+                    )
+
+                prediction_rows.append(
+                    {
+                        "participant": participant,
+                        "date": target_date,
+                        "actual_wellbeing": actual_value,
+                        "predicted_wellbeing": np.nan,
+                        "training_samples":
+                            len(training_features),
                         "prediction_status":
-                            "Missing_Target_Features",
+                            "Insufficient_Training_Data",
                     }
                 )
 
-                participant_missing += 1
-
                 continue
 
-            X_train = historical[
+            X_train = training_features[
                 FEATURE_COLUMNS
             ]
 
-            y_train = historical[
+            y_train = training_features[
                 "Wellbeing_Index"
             ]
 
-            X_target = target_features
+            valid_training_rows = (
+                X_train.notna().any(axis=1)
+                & y_train.notna()
+            )
+
+            X_train = X_train[
+                valid_training_rows
+            ]
+
+            y_train = y_train[
+                valid_training_rows
+            ]
+
+            if len(X_train) < MIN_TRAINING_SAMPLES:
+
+                insufficient_count += 1
+
+                actual_rows = participant_wellbeing[
+                    participant_wellbeing["date"]
+                    == target_date
+                ]
+
+                actual_value = np.nan
+
+                if not actual_rows.empty:
+                    actual_value = (
+                        actual_rows[
+                            "Wellbeing_Index"
+                        ].iloc[0]
+                    )
+
+                prediction_rows.append(
+                    {
+                        "participant": participant,
+                        "date": target_date,
+                        "actual_wellbeing": actual_value,
+                        "predicted_wellbeing": np.nan,
+                        "training_samples":
+                            len(X_train),
+                        "prediction_status":
+                            "Insufficient_Training_Data",
+                    }
+                )
+
+                continue
 
             model = build_model()
 
@@ -301,67 +400,92 @@ def main():
                 y_train,
             )
 
+            X_target = pd.DataFrame(
+                [
+                    target_features.values
+                ],
+                columns=FEATURE_COLUMNS,
+            )
+
             predicted_value = model.predict(
                 X_target
             )[0]
 
-            predictions.append(
-                {
-                    "participant_id": participant_id,
-                    "target_date": target_date,
-                    "actual_wellbeing": current_row[
+            actual_rows = participant_wellbeing[
+                participant_wellbeing["date"]
+                == target_date
+            ]
+
+            actual_value = np.nan
+
+            if not actual_rows.empty:
+                actual_value = (
+                    actual_rows[
                         "Wellbeing_Index"
-                    ],
-                    "training_samples": len(
-                        historical
-                    ),
+                    ].iloc[0]
+                )
+
+            prediction_rows.append(
+                {
+                    "participant": participant,
+                    "date": target_date,
+                    "actual_wellbeing": actual_value,
                     "predicted_wellbeing":
                         predicted_value,
+                    "training_samples":
+                        len(X_train),
                     "prediction_status":
                         "Predicted",
                 }
             )
 
-            participant_predictions += 1
+            predicted_count += 1
 
-        summaries.append(
+        summary_rows.append(
             {
-                "participant_id": participant_id,
-                "total_target_days":
-                    len(participant_data),
-                "predicted_days":
-                    participant_predictions,
-                "insufficient_history_days":
-                    participant_insufficient,
-                "missing_target_feature_days":
-                    participant_missing,
+                "participant": participant,
+                "total_prediction_dates":
+                    len(participant_features),
+                "predictions_created":
+                    predicted_count,
+                "insufficient_training_dates":
+                    insufficient_count,
+                "no_feature_dates":
+                    missing_feature_count,
             }
         )
 
         print(
-            f"{participant_id}: "
-            f"{participant_predictions} predicted, "
-            f"{participant_insufficient} insufficient history, "
-            f"{participant_missing} missing features"
+            f"  Predictions: {predicted_count}"
+        )
+
+        print(
+            f"  Insufficient training: "
+            f"{insufficient_count}"
+        )
+
+        print(
+            f"  No features: "
+            f"{missing_feature_count}"
         )
 
     predictions_df = pd.DataFrame(
-        predictions
+        prediction_rows
     )
 
-    summaries_df = pd.DataFrame(
-        summaries
+    summary_df = pd.DataFrame(
+        summary_rows
     )
 
     predictions_df = predictions_df.sort_values(
         [
-            "participant_id",
-            "target_date",
+            "participant",
+            "date",
         ]
     ).reset_index(drop=True)
 
-    summaries_df = summaries_df.sort_values(
-        "participant_id"
+    summary_df = summary_df.sort_values(
+        "participant"
     ).reset_index(drop=True)
 
     predictions_df.to_csv(
@@ -369,28 +493,25 @@ def main():
         index=False,
     )
 
-    summaries_df.to_csv(
+    summary_df.to_csv(
         SUMMARY_FILE,
         index=False,
     )
 
     print()
     print("=" * 80)
-    print("PERSONALIZED RANDOM FOREST COMPLETED")
+    print("PERSONALIZED MODEL TRAINING COMPLETE")
     print("=" * 80)
     print()
 
     print(
-        f"Prediction rows: "
+        f"Total prediction rows: "
         f"{len(predictions_df)}"
     )
 
     print(
-        f"Predicted rows: "
-        f"{(
-            predictions_df['prediction_status']
-            == 'Predicted'
-        ).sum()}"
+        f"Successful predictions: "
+        f"{(predictions_df['prediction_status'] == 'Predicted').sum()}"
     )
 
     print()
