@@ -1,13 +1,19 @@
 from pathlib import Path
-import pandas as pd
+
 import numpy as np
+import pandas as pd
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
-DATA_DIR = PROJECT_ROOT / "data" / "pmdata"
-RESULTS_DIR = PROJECT_ROOT / "ML" / "Results"
 
-RESULTS_DIR.mkdir(parents=True, exist_ok=True)
+DATA_DIR = PROJECT_ROOT / "data" / "pmdata"
+ML_DIR = PROJECT_ROOT / "ML"
+RESULTS_DIR = ML_DIR / "Results"
+
+RESULTS_DIR.mkdir(
+    parents=True,
+    exist_ok=True,
+)
 
 
 BEHAVIOR_VARIABLES = [
@@ -27,268 +33,456 @@ BEHAVIOR_VARIABLES = [
 ]
 
 
-DATE_COLUMNS = [
-    "date",
-    "Date",
-    "datetime",
-    "Datetime",
-    "timestamp",
-    "Timestamp",
-]
+def find_participant_files():
+
+    if not DATA_DIR.exists():
+        raise FileNotFoundError(
+            f"Data directory not found:\n{DATA_DIR}"
+        )
+
+    files = sorted(
+        DATA_DIR.glob("*.csv")
+    )
+
+    if not files:
+        raise FileNotFoundError(
+            f"No participant CSV files found in:\n{DATA_DIR}"
+        )
+
+    return files
 
 
-def find_date_column(df):
-    for col in DATE_COLUMNS:
-        if col in df.columns:
-            return col
-    return None
+def calculate_slope(
+    dates,
+    values,
+):
+
+    valid = pd.notna(values)
+
+    dates = dates[valid]
+    values = values[valid]
+
+    if len(values) < 2:
+        return np.nan
+
+    day_numbers = (
+        dates - dates.min()
+    ).dt.total_seconds() / 86400.0
+
+    if day_numbers.nunique() < 2:
+        return np.nan
+
+    return np.polyfit(
+        day_numbers.to_numpy(),
+        values.to_numpy(),
+        1,
+    )[0]
 
 
-def get_long_missing_streak(series):
-    values = series.notna()
+def calculate_change(values):
 
-    max_streak = 0
-    current_streak = 0
+    values = values.dropna()
 
-    for value in values:
-        if not value:
-            current_streak += 1
-            max_streak = max(max_streak, current_streak)
+    if len(values) < 2:
+        return np.nan
+
+    return (
+        values.iloc[-1]
+        - values.iloc[0]
+    )
+
+
+def get_active_variables(df):
+
+    first_date = df["date"].min()
+
+    first_7_days_end = (
+        first_date
+        + pd.Timedelta(days=6)
+    )
+
+    first_7_days = df[
+        (df["date"] >= first_date)
+        & (df["date"] <= first_7_days_end)
+    ]
+
+    active_variables = []
+
+    for variable in BEHAVIOR_VARIABLES:
+
+        if variable not in df.columns:
+            continue
+
+        values = pd.to_numeric(
+            first_7_days[variable],
+            errors="coerce",
+        )
+
+        if values.notna().any():
+            active_variables.append(
+                variable
+            )
+
+    return active_variables
+
+
+def build_features_for_target_date(
+    participant_df,
+    target_date,
+    active_variables,
+):
+
+    history_start = (
+        target_date
+        - pd.Timedelta(days=7)
+    )
+
+    history_end = (
+        target_date
+        - pd.Timedelta(days=1)
+    )
+
+    history = participant_df[
+        (participant_df["date"] >= history_start)
+        & (participant_df["date"] <= history_end)
+    ].copy()
+
+    features = {}
+
+    for variable in BEHAVIOR_VARIABLES:
+
+        slope_column = (
+            f"{variable}_7d_slope"
+        )
+
+        change_column = (
+            f"{variable}_7d_change"
+        )
+
+        if variable not in active_variables:
+
+            features[slope_column] = np.nan
+            features[change_column] = np.nan
+
+            continue
+
+        values = pd.to_numeric(
+            history[variable],
+            errors="coerce",
+        )
+
+        features[slope_column] = (
+            calculate_slope(
+                history["date"],
+                values,
+            )
+        )
+
+        features[change_column] = (
+            calculate_change(
+                values
+            )
+        )
+
+    return features
+
+
+def process_participant(file_path):
+
+    participant_id = file_path.stem
+
+    df = pd.read_csv(
+        file_path
+    )
+
+    date_candidates = [
+        "date",
+        "Date",
+        "datetime",
+        "Datetime",
+        "timestamp",
+        "Timestamp",
+    ]
+
+    date_column = None
+
+    for candidate in date_candidates:
+
+        if candidate in df.columns:
+            date_column = candidate
+            break
+
+    if date_column is None:
+        raise ValueError(
+            f"No date column found in "
+            f"{file_path.name}"
+        )
+
+    df["date"] = pd.to_datetime(
+        df[date_column],
+        errors="coerce",
+    )
+
+    df = df.dropna(
+        subset=["date"]
+    ).copy()
+
+    df = df.sort_values(
+        "date"
+    ).reset_index(
+        drop=True
+    )
+
+    for variable in BEHAVIOR_VARIABLES:
+
+        if variable in df.columns:
+            df[variable] = pd.to_numeric(
+                df[variable],
+                errors="coerce",
+            )
+
         else:
-            current_streak = 0
+            df[variable] = np.nan
 
-    return max_streak
+    if df.empty:
+        return [], {
+            "participant_id": participant_id,
+            "source_file": file_path.name,
+            "target_dates": 0,
+            "features_created": 0,
+        }
 
+    active_variables = get_active_variables(
+        df
+    )
 
-def calculate_feature(window, column):
-    values = window[column].dropna()
+    removed_variables = [
+        variable
+        for variable in BEHAVIOR_VARIABLES
+        if variable not in active_variables
+    ]
 
-    if len(values) == 0:
-        return np.nan, np.nan
-
-    if len(values) == 1:
-        return np.nan, np.nan
-
-    first_value = values.iloc[0]
-    last_value = values.iloc[-1]
-
-    change = last_value - first_value
-
-    dates = window.loc[values.index, "date"]
-    day_numbers = (dates - dates.iloc[0]).dt.days.astype(float)
-
-    if len(values) >= 2 and day_numbers.nunique() >= 2:
-        slope = np.polyfit(day_numbers, values.astype(float), 1)[0]
-    else:
-        slope = np.nan
-
-    return slope, change
-
-
-all_results = []
-availability_log = []
-
-participant_files = sorted(DATA_DIR.glob("*.csv"))
-
-print("=" * 80)
-print("BUILDING 7-DAY BEHAVIOR FEATURES")
-print("=" * 80)
-print(f"Participant files found: {len(participant_files)}")
-print()
-
-
-for file_path in participant_files:
-
-    participant = file_path.stem.replace("_daily_merged", "")
-
-    print("-" * 80)
-    print(f"Processing: {file_path.stem}")
-
-    try:
-        df = pd.read_csv(file_path)
-
-        date_column = find_date_column(df)
-
-        if date_column is None:
-            print("  ERROR: No date column found")
-            availability_log.append({
-                "participant": participant,
-                "variable": "",
-                "status": "Missing_Date_Column",
-                "message": "No date column found"
-            })
-            continue
-
-        df["date"] = pd.to_datetime(df[date_column], errors="coerce")
-        df = df.dropna(subset=["date"]).copy()
-
-        if df.empty:
-            print("  ERROR: No valid dates")
-            continue
-
-        df = (
-            df.sort_values("date")
-            .drop_duplicates(subset=["date"])
-            .reset_index(drop=True)
+    for variable in removed_variables:
+        print(
+            f"  {variable}: removed "
+            f"(no data in first 7 days)"
         )
 
-        first_date = df["date"].min()
-        first_7_days_end = first_date + pd.Timedelta(days=6)
+    print(
+        f"  Active variables: "
+        f"{len(active_variables)}"
+    )
 
-        active_variables = []
+    first_date = df["date"].min()
 
-        for variable in BEHAVIOR_VARIABLES:
+    target_dates = pd.date_range(
+        start=first_date + pd.Timedelta(days=7),
+        end=df["date"].max(),
+        freq="D",
+    )
 
-            if variable not in df.columns:
-                first_week = df[
-                    (df["date"] >= first_date)
-                    & (df["date"] <= first_7_days_end)
-                ]
+    participant_results = []
 
-                has_first_week_data = False
+    for target_date in target_dates:
 
-                if not first_week.empty:
-                    has_first_week_data = False
-
-                if not has_first_week_data:
-                    print(
-                        f"  {variable}: removed "
-                        f"(no data in first 7 days)"
-                    )
-
-                    availability_log.append({
-                        "participant": participant,
-                        "variable": variable,
-                        "status": "Removed_First_7_Days",
-                        "message": "No data available in first 7 days"
-                    })
-
-                    continue
-
-            first_week = df[
-                (df["date"] >= first_date)
-                & (df["date"] <= first_7_days_end)
-            ]
-
-            if variable in df.columns:
-                first_week_values = first_week[variable].notna().sum()
-            else:
-                first_week_values = 0
-
-            if first_week_values == 0:
-                print(
-                    f"  {variable}: removed "
-                    f"(no data in first 7 days)"
-                )
-
-                availability_log.append({
-                    "participant": participant,
-                    "variable": variable,
-                    "status": "Removed_First_7_Days",
-                    "message": "No data available in first 7 days"
-                })
-
-                continue
-
-            active_variables.append(variable)
-
-        if not active_variables:
-            print("  ERROR: No behavioral variables available")
-            continue
-
-        print(f"  Active variables: {len(active_variables)}")
-
-        target_dates = pd.date_range(
-            start=first_date + pd.Timedelta(days=7),
-            end=df["date"].max(),
-            freq="D"
+        features = build_features_for_target_date(
+            df,
+            target_date,
+            active_variables,
         )
 
-        participant_feature_rows = 0
+        row = {
+            "participant_id": participant_id,
+            "target_date": target_date,
+        }
 
-        for target_date in target_dates:
+        row.update(
+            features
+        )
 
-            history_start = target_date - pd.Timedelta(days=7)
-            history_end = target_date - pd.Timedelta(days=1)
+        participant_results.append(
+            row
+        )
 
-            window = df[
-                (df["date"] >= history_start)
-                & (df["date"] <= history_end)
-            ].copy()
+    processing_info = {
+        "participant_id": participant_id,
+        "source_file": file_path.name,
+        "target_dates": len(target_dates),
+        "features_created": len(
+            participant_results
+        ),
+        "active_variables": len(
+            active_variables
+        ),
+        "removed_variables": len(
+            removed_variables
+        ),
+    }
 
-            if window.empty:
-                continue
+    return (
+        participant_results,
+        processing_info,
+    )
 
-            row = {
-                "participant": participant,
-                "date": target_date
-            }
 
-            for variable in active_variables:
+def main():
 
-                slope, change = calculate_feature(
-                    window,
-                    variable
+    print()
+    print("=" * 80)
+    print("BUILD 7-DAY BEHAVIORAL FEATURES")
+    print("=" * 80)
+    print()
+
+    print(
+        f"Data directory:\n{DATA_DIR}"
+    )
+
+    print(
+        f"Results directory:\n{RESULTS_DIR}"
+    )
+
+    print()
+
+    participant_files = (
+        find_participant_files()
+    )
+
+    print(
+        f"Participant files found: "
+        f"{len(participant_files)}"
+    )
+
+    print()
+
+    all_features = []
+    processing_log = []
+
+    for file_path in participant_files:
+
+        participant_id = file_path.stem
+
+        print(
+            f"Processing: "
+            f"{participant_id}"
+        )
+
+        try:
+
+            features, info = (
+                process_participant(
+                    file_path
                 )
+            )
 
-                row[f"{variable}_7d_slope"] = slope
-                row[f"{variable}_7d_change"] = change
+            all_features.extend(
+                features
+            )
 
-                missing_streak = get_long_missing_streak(
-                    window[variable]
-                )
+            processing_log.append(
+                info
+            )
 
-                if missing_streak > 7:
-                    status = "Warning_Long_Missing"
-                else:
-                    status = "Available"
+            print(
+                f"  Target dates: "
+                f"{info['target_dates']}"
+            )
 
-                availability_log.append({
-                    "participant": participant,
-                    "variable": variable,
-                    "date": target_date,
-                    "status": status,
-                    "missing_streak_days": missing_streak
-                })
+        except Exception as error:
 
-            all_results.append(row)
-            participant_feature_rows += 1
+            print(
+                f"  ERROR: {error}"
+            )
 
-        print(f"  Feature rows created: {participant_feature_rows}")
+            processing_log.append(
+                {
+                    "participant_id": participant_id,
+                    "source_file": file_path.name,
+                    "target_dates": 0,
+                    "features_created": 0,
+                    "active_variables": 0,
+                    "removed_variables": 0,
+                    "error": str(error),
+                }
+            )
 
-    except Exception as e:
-        print(f"  ERROR: {e}")
+    if not all_features:
+        raise RuntimeError(
+            "No 7-day behavioral features "
+            "were created."
+        )
 
-        availability_log.append({
-            "participant": participant,
-            "variable": "",
-            "status": "Processing_Error",
-            "message": str(e)
-        })
+    features_df = pd.DataFrame(
+        all_features
+    )
+
+    features_df = features_df.sort_values(
+        [
+            "participant_id",
+            "target_date",
+        ]
+    ).reset_index(
+        drop=True
+    )
+
+    processing_log_df = (
+        pd.DataFrame(
+            processing_log
+        )
+    )
+
+    features_output = (
+        RESULTS_DIR
+        / "behavior_7day_features.csv"
+    )
+
+    log_output = (
+        RESULTS_DIR
+        / "behavior_7day_feature_processing_log.csv"
+    )
+
+    features_df.to_csv(
+        features_output,
+        index=False,
+    )
+
+    processing_log_df.to_csv(
+        log_output,
+        index=False,
+    )
+
+    print()
+    print("=" * 80)
+    print("7-DAY FEATURES COMPLETED")
+    print("=" * 80)
+    print()
+
+    print(
+        f"Participants processed: "
+        f"{len(processing_log_df)}"
+    )
+
+    print(
+        f"Feature rows created: "
+        f"{len(features_df)}"
+    )
+
+    print(
+        f"Feature columns: "
+        f"{len(features_df.columns)}"
+    )
+
+    print()
+
+    print(
+        f"Saved:\n{features_output}"
+    )
+
+    print(
+        f"Saved:\n{log_output}"
+    )
+
+    print()
 
 
-features_df = pd.DataFrame(all_results)
-availability_df = pd.DataFrame(availability_log)
-
-features_output = RESULTS_DIR / "behavior_7day_features.csv"
-availability_output = RESULTS_DIR / "behavior_availability_log.csv"
-
-features_df.to_csv(
-    features_output,
-    index=False
-)
-
-availability_df.to_csv(
-    availability_output,
-    index=False
-)
-
-
-print()
-print("=" * 80)
-print("7-DAY FEATURE BUILD COMPLETE")
-print("=" * 80)
-print(f"Feature rows created: {len(features_df)}")
-print(f"Feature columns: {len(features_df.columns)}")
-print(f"Feature output: {features_output}")
-print(f"Availability log: {availability_output}")
+if __name__ == "__main__":
+    main()
