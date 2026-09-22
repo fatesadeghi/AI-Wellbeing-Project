@@ -1,36 +1,3 @@
-Purpose
--------
-Build a participant-specific daily Wellbeing Index from the five
-wellbeing variables available in the PMData dataset.
-
-Wellbeing variables
--------------------
-fatigue          -> reversed
-mood             -> direct
-readiness        -> direct
-sleep_quality    -> direct
-stress           -> reversed
-
-Formula
--------
-Wellbeing_Index =
-    (-Z_fatigue
-     + Z_mood
-     + Z_readiness
-     + Z_sleep_quality
-     - Z_stress) / 5
-
-The Z-score is calculated separately for each participant and each
-wellbeing variable using that participant's available observations.
-
-This script does NOT:
-- create ML features
-- train a model
-- perform prediction
-- use behavioral variables
-- use future behavioral information
-"""
-
 from pathlib import Path
 
 import numpy as np
