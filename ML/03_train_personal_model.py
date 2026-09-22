@@ -1,34 +1,3 @@
-Purpose
--------
-Train a personalized Random Forest model for each participant
-to predict that participant's daily Wellbeing Index.
-
-Prediction design
------------------
-For each participant and each target date:
-
-    Training data:
-        all previous target dates only
-
-    Prediction:
-        Wellbeing Index on the current target date
-
-The model is retrained from scratch for every target date.
-
-This creates a chronological walk-forward prediction system.
-
-Important
----------
-- One model per participant.
-- No participant pooling.
-- No random train/test split.
-- No future information is used.
-- The target day's behavioral features are used only for prediction.
-- The target day's wellbeing value is never included in training.
-- Missing feature values are handled with median imputation.
-- Random Forest is the only predictive model.
-"""
-
 from pathlib import Path
 
 import numpy as np
