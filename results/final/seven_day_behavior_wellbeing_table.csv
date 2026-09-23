@@ -1,0 +1,14 @@
+Behavioral_Variable,fatigue,mood,readiness,sleep_quality,stress,Total
+Steps,2,2,5,1,1,11
+Exercise_Count,3,0,6,0,1,10
+Exercise_Duration,2,0,2,1,1,6
+Exercise_Distance,1,0,5,2,1,9
+Exercise_Calories,2,0,3,1,1,7
+Exercise_Avg_HR,3,0,1,0,1,5
+Sleep_Hours,0,2,1,1,1,5
+Sleep_Duration_Score,0,1,3,1,4,9
+Deep_Sleep_Minutes,1,0,2,0,3,6
+Sleep_Restlessness,0,1,2,2,2,7
+Sleep_Composition,2,1,2,1,3,9
+Sleep_Revitalization,1,2,4,0,1,8
+Sleep_Score,0,1,5,1,4,11

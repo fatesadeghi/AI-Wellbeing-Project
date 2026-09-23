@@ -1,0 +1,37 @@
+FINAL RESULTS SUMMARY
+=====================
+
+Analysis framework:
+Previous 7 days of behavioral data -> same-day wellbeing
+
+Participants: 16
+Total relationships tested: 1040
+Relationships included (N >= 10): 845
+Valid correlations: 794
+Behavioral variables: 13
+Wellbeing variables: 5
+Mean r: -0.0164
+Mean absolute r: 0.1688
+Nominally significant associations (p < 0.05): 103
+
+Seven-day behavior × wellbeing table:
+This table counts nominally significant participant-level associations between each behavioral variable measured during the previous seven days and each same-day wellbeing variable.
+
+Wellbeing_Variable    fatigue  mood  readiness  sleep_quality  stress  Total
+Behavioral_Variable                                                         
+Steps                       2     2          5              1       1     11
+Exercise_Count              3     0          6              0       1     10
+Exercise_Duration           2     0          2              1       1      6
+Exercise_Distance           1     0          5              2       1      9
+Exercise_Calories           2     0          3              1       1      7
+Exercise_Avg_HR             3     0          1              0       1      5
+Sleep_Hours                 0     2          1              1       1      5
+Sleep_Duration_Score        0     1          3              1       4      9
+Deep_Sleep_Minutes          1     0          2              0       3      6
+Sleep_Restlessness          0     1          2              2       2      7
+Sleep_Composition           2     1          2              1       3      9
+Sleep_Revitalization        1     2          4              0       1      8
+Sleep_Score                 0     1          5              1       4     11
+
+Interpretation note:
+Associations with p < 0.05 are treated as nominally significant exploratory associations. They do not establish causality.
