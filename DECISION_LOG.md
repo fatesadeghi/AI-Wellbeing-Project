@@ -8,49 +8,49 @@
 
 > Can AI detect changes in a person's well-being by learning their daily habits and spotting unusual behavior?
 
-This decision log documents the main methodological decisions made throughout the project, the rationale behind those decisions, and how they were implemented.
+This decision log documents the main methodological decisions made throughout the project, the reasons for those decisions, and how they were implemented.
 
 The purpose of this document is to support:
 
-* methodological transparency;
-* reproducibility;
-* traceability of research decisions;
-* interpretation of the final results;
-* and clear separation between statistical association and machine-learning prediction.
+- methodological transparency;
+- reproducibility;
+- traceability of research decisions;
+- interpretation of the final results;
+- and clear separation between statistical association and machine-learning prediction.
 
 ---
 
 # 1. Dataset Selection
 
-### Decision
+## Decision
 
-Use the **PMData** dataset as the main dataset for the final analysis.
+Use the PMData dataset as the main dataset for the final analysis.
 
-### Reason
+## Reason
 
-The project requires both objective behavioral measurements and well-being-related information.
+The project requires both objective behavioural measurements and well-being-related information.
 
 The initial exploration considered the CASAS smart-home dataset. However, it did not provide sufficient direct self-reported well-being information for the intended analysis.
 
 PMData provided a more suitable combination of:
 
-* behavioral and activity measurements;
-* sleep-related measurements;
-* self-reported well-being variables.
+- behavioural and activity measurements;
+- sleep-related measurements;
+- self-reported well-being variables.
 
-### Outcome
+## Outcome
 
 PMData became the final dataset used for the statistical and machine-learning analyses.
 
 ---
 
-# 2. Behavioral Variable Selection
+# 2. Behavioural Variable Selection
 
-### Decision
+## Decision
 
-Retain the full set of **13 behavioral variables** rather than reducing the analysis to a smaller subset.
+Retain the full set of 13 behavioural variables rather than reducing the analysis to a smaller subset.
 
-### Behavioral Variables
+## Behavioural Variables
 
 1. `Steps`
 2. `Exercise_Count`
@@ -66,25 +66,27 @@ Retain the full set of **13 behavioral variables** rather than reducing the anal
 12. `Sleep_Revitalization`
 13. `Sleep_Score`
 
-### Reason
+## Reason
 
-Well-being is multidimensional, and changes in different aspects of daily behavior may provide different information.
+Well-being is multidimensional, and different aspects of daily behaviour may provide different information.
 
-Reducing the behavioral set before analysis could remove potentially informative patterns.
+Reducing the behavioural set before analysis could remove potentially informative patterns.
 
-### Outcome
+The final analysis therefore retained all 13 behavioural variables as candidate behavioural measures.
 
-All 13 variables were retained as candidate behavioral predictors.
+## Outcome
+
+All 13 behavioural variables were retained for the statistical analysis and as the underlying behavioural variables for the machine-learning feature construction.
 
 ---
 
 # 3. Well-Being Variables
 
-### Decision
+## Decision
 
 Use five self-reported well-being-related variables as outcome measures.
 
-### Variables
+## Variables
 
 1. `fatigue`
 2. `mood`
@@ -92,69 +94,94 @@ Use five self-reported well-being-related variables as outcome measures.
 4. `sleep_quality`
 5. `stress`
 
-### Reason
+## Reason
 
 These variables represent different reported dimensions related to daily well-being.
 
-Using multiple indicators allows the analysis to examine whether behavioral changes are associated with different aspects of self-reported well-being.
+Using multiple indicators allows the analysis to examine whether behavioural patterns are associated with different aspects of self-reported well-being rather than relying on a single measure.
 
-### Outcome
+## Outcome
 
-The five variables were retained for the statistical and ML analyses.
+The five variables were retained for the statistical analysis.
+
+For the machine-learning stage, these daily well-being measures were combined into a Wellbeing Index used as the prediction target.
 
 ---
 
-# 4. Personalized Baseline
+# 4. Participant-Level Analysis
 
-### Decision
+## Decision
 
-Construct a separate behavioral baseline for each participant.
+Perform the main statistical analysis separately for each participant.
 
-### Reason
+## Reason
 
-The project is based on the principle that the same behavioral value may represent normal behavior for one person but an unusual change for another.
+The central research question focuses on whether AI can learn an individual's own behavioural patterns and identify meaningful changes in relation to that individual's well-being.
+
+Participants can have different:
+
+- activity levels;
+- sleep patterns;
+- daily routines;
+- behavioural variability;
+- relationships between behaviour and well-being.
+
+Combining all participants into a single homogeneous pattern could therefore hide important individual differences.
+
+## Outcome
+
+The statistical analysis was performed at the participant level rather than treating all participants as one homogeneous population.
+
+---
+
+# 5. Personalized Behavioural Baseline
+
+## Decision
+
+Construct a separate behavioural baseline for each participant.
+
+## Reason
+
+The same behavioural value may represent normal behaviour for one person but an unusual change for another.
 
 For example, a particular number of daily steps may be normal for one participant but unusual for another.
 
-Therefore, a population-wide behavioral threshold was not considered sufficient for detecting individual changes.
+Therefore, a population-wide behavioural threshold was not considered sufficient for the personalized framework.
 
-### Implementation
+## Implementation
 
 For each participant, available observations were ordered chronologically.
 
-The first half of the participant's observations was used to establish their personal baseline.
+The first 50% of the participant's chronological observations were used to establish the personal baseline.
 
-Baseline statistics included:
+For each behavioural variable, the baseline included:
 
-* mean;
-* standard deviation.
+- mean;
+- standard deviation.
 
-These statistics were calculated separately for each behavioral variable.
+These statistics were calculated separately for each participant and behavioural variable.
 
-### Outcome
+## Outcome
 
-Each participant received an individual behavioral baseline.
+Each participant received an individual behavioural baseline that was used as the reference point for subsequent behavioural deviation analysis.
 
 ---
 
-# 5. Chronological 50/50 Baseline Split
+# 6. Chronological Baseline Construction
 
-### Decision
+## Decision
 
-Use a chronological **50/50 split** for baseline construction.
+Use a chronological 50/50 split for baseline construction.
 
-### Reason
+## Reason
 
-The baseline should represent the individual's earlier behavioral pattern rather than incorporating information from the future.
+The baseline should represent the individual's earlier behavioural pattern rather than incorporating information from later observations.
 
-A chronological split also preserves the temporal structure of the longitudinal data.
+A chronological split preserves the temporal structure of the longitudinal data and avoids using future observations to define the earlier personal reference pattern.
 
-### Implementation
+## Implementation
 
 For each participant:
-
-* the earlier 50% of observations formed the baseline period;
-* the later 50% formed the analysis period.
 
 ```text
 Earlier 50% of observations
@@ -164,953 +191,3 @@ Earlier 50% of observations
 Later 50% of observations
             ↓
       Analysis period
-```
-
-### Outcome
-
-The baseline was established before the main deviation analysis.
-
----
-
-# 6. Personalized Deviation Measures
-
-### Decision
-
-Measure behavioral deviation using a participant-specific standardized score.
-
-### Formula
-
-$$
-Z = \frac{X-\mu_{baseline}}{\sigma_{baseline}}
-$$
-
-where:
-
-* \(X\) = observed value;
-* \(\mu_{baseline}\) = participant's baseline mean;
-* \(\sigma_{baseline}\) = participant's baseline standard deviation.
-
-### Interpretation
-
-A positive Z-score indicates that the observed value is above the participant's usual level.
-
-A negative Z-score indicates that it is below the participant's usual level.
-
-The absolute value of the Z-score indicates how unusual the observation is relative to the participant's baseline variability.
-
-### Important Interpretation
-
-The deviation measure identifies **unusual behavior**, not whether the behavior is inherently good or bad.
-
-For example:
-
-* unusually low activity may be relevant;
-* unusually high activity may also be relevant;
-* unusually long sleep may be relevant;
-* unusually short sleep may also be relevant.
-
-The method does not determine the health meaning of the deviation by itself.
-
----
-
-# 7. Primary Behavioral Deviation Threshold
-
-### Decision
-
-Use **|Z| ≥ 2** as the primary deviation threshold.
-
-### Reason
-
-A threshold of 2 identifies relatively large deviations from an individual's baseline.
-
-This provides a more conservative definition of unusual behavior and reduces the number of smaller fluctuations classified as deviations.
-
-### Interpretation
-
-* \(|Z| < 2\): not classified as a primary deviation;
-* \(|Z| \geq 2\): classified as a primary deviation.
-
-Both unusually high and unusually low values are included.
-
-### Outcome
-
-The **|Z| ≥ 2** threshold was used as the primary deviation criterion.
-
----
-
-# 8. Sensitivity Analysis with |Z| ≥ 1
-
-### Decision
-
-Perform a separate sensitivity analysis using **|Z| ≥ 1**.
-
-### Reason
-
-A threshold of 1 is more sensitive than a threshold of 2 and captures smaller deviations that may be missed by the primary threshold.
-
-The purpose of the sensitivity analysis is to examine whether the statistical findings are substantially affected by the choice of deviation threshold.
-
-### Outcome
-
-The **|Z| ≥ 1** analysis was retained as a sensitivity analysis.
-
-It does not replace the primary **|Z| ≥ 2** analysis.
-
-It is also not considered a fourth primary temporal analysis.
-
----
-
-# 9. Handling Incomplete and Unequal Data Availability
-
-### Decision
-
-Analyze each participant based on the observations that are actually available while explicitly tracking missing data.
-
-### Reason
-
-Participants did not necessarily have identical amounts of data for every behavioral variable.
-
-Removing all participants with any missing information would unnecessarily reduce the usable sample.
-
-### Implementation
-
-Data availability was assessed at the participant and feature level.
-
-For the ML pipeline, feature availability was explicitly classified, including:
-
-* `Available`;
-* `Available_With_Missing`;
-* `Available_With_Long_Missing_Streak`;
-* `Available_Sleep_Exempt`;
-* `Missing_Column`;
-* `Excluded_First_10_Days_Missing`.
-
-### Outcome
-
-Missingness was documented rather than silently ignored.
-
-The feature-availability analysis identified:
-
-| Availability Category                | Count |
-| ------------------------------------ | ----: |
-| `Available_With_Missing`             |   115 |
-| `Available`                          |    69 |
-| `Available_Sleep_Exempt`             |    14 |
-| `Available_With_Long_Missing_Streak` |     9 |
-| `Missing_Column`                     |     1 |
-| `Excluded_First_10_Days_Missing`     |     0 |
-
----
-
-# 10. Minimum Sample Size N ≥ 10
-
-### Decision
-
-Require at least **10 usable paired observations** for a participant-level behavior × well-being relationship.
-
-### Reason
-
-Correlation estimates based on very few observations can be unstable and difficult to interpret.
-
-A minimum of 10 observations was therefore used as a practical inclusion criterion.
-
-### Implementation
-
-For each participant × behavioral variable × well-being variable relationship:
-
-$$
-N \geq 10
-$$
-
-was required for the relationship to be included in the statistical analysis.
-
-### Outcome
-
-Relationships with fewer than 10 usable paired observations were not treated as valid statistical relationships.
-
----
-
-# 11. Pearson Correlation
-
-### Decision
-
-Use **Pearson correlation** to examine linear relationships between behavioral measures and well-being variables.
-
-### Reason
-
-The primary statistical question was whether changes in behavioral variables were associated with changes in well-being-related measures.
-
-Pearson's \(r\) provides:
-
-* direction of association;
-* strength of linear association;
-* a corresponding statistical significance test.
-
-### Interpretation
-
-$$
--1 \leq r \leq 1
-$$
-
-* positive \(r\): higher values of one variable are associated with higher values of the other;
-* negative \(r\): higher values of one variable are associated with lower values of the other;
-* values closer to zero indicate weaker linear association.
-
-### Important Limitation
-
-Correlation measures association and **does not establish causation**.
-
----
-
-# 12. Initial Anomaly-Based Analysis
-
-### Decision
-
-Begin the deviation-based analysis by examining unusual behavioral observations relative to each participant's personal baseline.
-
-### Reason
-
-The central research question concerns whether changes in daily behavior can provide signals of changes in well-being.
-
-Therefore, identifying departures from an individual's normal behavioral pattern was an important initial analytical step.
-
-### Outcome
-
-Personalized deviations were generated from the baseline and used as the basis for subsequent relationship analyses.
-
----
-
-# 13. Full-Period Personalized Deviation Analysis
-
-### Decision
-
-Use the complete analysis period after baseline construction rather than restricting the analysis to a small number of manually selected anomaly days.
-
-### Reason
-
-The research question concerns whether behavioral changes over time are related to well-being.
-
-Using the complete analysis period allows the statistical analysis to evaluate the broader relationship rather than only a small subset of observations.
-
-### Outcome
-
-Daily personalized deviations were retained throughout the analysis period.
-
----
-
-# 14. Same-Day Analysis
-
-### Decision
-
-Perform a same-day analysis between behavioral deviations and well-being measurements from the same day.
-
-### Reason
-
-A same-day analysis tests whether unusual behavior and well-being measurements are associated within the same temporal window.
-
-### Temporal Relationship
-
-```text
-Behavior at day t
-        ↓
-Well-being at day t
-```
-
-### Outcome
-
-The final same-day analysis contained:
-
-* 1,040 tested relationships;
-* 900 relationships with \(N \geq 10\);
-* 180 raw significant relationships;
-* 43 FDR-significant relationships.
-
----
-
-# 15. Benjamini–Hochberg FDR Correction
-
-### Decision
-
-Apply the **Benjamini–Hochberg False Discovery Rate (FDR)** correction to the multiple statistical tests.
-
-### Reason
-
-The analysis evaluates many participant × behavior × well-being relationships.
-
-When many statistical tests are performed, some small p-values can occur by chance.
-
-Using uncorrected p-values alone would increase the risk of false-positive findings.
-
-### Implementation
-
-The Benjamini–Hochberg procedure was applied to the statistical test families.
-
-The adjusted significance criterion was:
-
-$$
-q < 0.05
-$$
-
-### Interpretation
-
-* raw \(p < 0.05\): statistically significant before multiple-testing correction;
-* FDR \(q < 0.05\): statistically significant after multiple-testing correction.
-
-### Outcome
-
-FDR-corrected results were used for the final interpretation of statistical significance.
-
----
-
-# 16. One-Day Lagged Analysis
-
-### Decision
-
-Perform a one-day lagged analysis.
-
-### Reason
-
-A behavioral change may occur before a change in self-reported well-being.
-
-Therefore, same-day associations alone may not capture temporal relationships.
-
-### Temporal Relationship
-
-```text
-Behavior at day t
-        ↓
-Well-being at day t+1
-```
-
-### Outcome
-
-The final one-day lagged analysis contained:
-
-* 1,040 tested relationships;
-* 860 relationships with \(N \geq 10\);
-* 63 raw significant relationships;
-* 4 FDR-significant relationships.
-
-### Interpretation
-
-This analysis examines temporal ordering but does not by itself establish causality.
-
----
-
-# 17. Seven-Day Historical Analysis
-
-### Decision
-
-Analyze the relationship between recent behavioral history and same-day well-being.
-
-### Reason
-
-A person's well-being may reflect accumulated behavioral patterns rather than only the behavior observed on the same day.
-
-The seven-day analysis therefore examined whether behavior during the previous seven days was associated with well-being on the current day.
-
-### Temporal Relationship
-
-```text
-Previous seven days of behavior
-             ↓
-      Current-day well-being
-```
-
-### Outcome
-
-The final seven-day analysis contained:
-
-* 1,040 tested relationships;
-* 794 relationships with \(N \geq 10\);
-* 103 raw significant relationships;
-* 6 FDR-significant relationships.
-
----
-
-# 18. Final Statistical Results
-
-### Decision
-
-Use the final FDR-corrected results from the **three primary temporal analyses**, together with the separate **sensitivity analysis**, as the final statistical results of the project.
-
-### Primary Temporal Analyses
-
-The three primary temporal analyses are:
-
-1. Same-day analysis;
-2. One-day lagged analysis;
-3. Seven-day historical analysis.
-
-The **|Z| ≥ 1** analysis is treated separately as a sensitivity analysis.
-
-It does not replace the primary **|Z| ≥ 2** analysis and is not considered a fourth primary temporal analysis.
-
-### Final Summary
-
-| Analysis             | Analysis Type    | Total Tests | Valid N ≥ 10 | Raw Significant | FDR Significant |
-| -------------------- | ---------------- | ----------: | -----------: | --------------: | --------------: |
-| Same-day             | Primary temporal |       1,040 |          900 |             180 |              43 |
-| One-day lagged       | Primary temporal |       1,040 |          860 |              63 |               4 |
-| Seven-day history    | Primary temporal |       1,040 |          794 |             103 |               6 |
-| Sensitivity, |Z| ≥ 1 | Sensitivity      |       1,040 |          887 |             182 |              47 |
-| **Total**            | **All analyses** |   **4,160** |    **3,443** |         **528** |         **100** |
-
-### Interpretation
-
-The three primary temporal analyses and the separate sensitivity analysis identified statistically significant relationships after FDR correction.
-
-The sensitivity analysis is used to assess robustness to a less conservative behavioral-deviation threshold.
-
-All findings should be interpreted as **associations between behavioral patterns and well-being-related measures**.
-
-They do not demonstrate that a behavioral change causes a change in well-being.
-
----
-
-# 19. Machine-Learning Strategy
-
-### Decision
-
-Develop a personalized machine-learning system to investigate whether daily behavioral information can model **next-day changes in well-being**.
-
-### Reason
-
-The statistical analyses evaluate relationships between variables.
-
-The research question also asks whether AI can learn individual behavioral patterns and model changes in well-being.
-
-A machine-learning component was therefore added to evaluate predictive modeling at the individual level.
-
-### System Design
-
-The ML pipeline:
-
-1. prepares participant-level daily data;
-2. evaluates feature availability;
-3. creates behavioral-derived features;
-4. defines next-day well-being targets;
-5. trains participant-specific models;
-6. evaluates model performance;
-7. analyzes feature importance.
-
-### Feature Space
-
-The system retained the 13 behavioral variables as the underlying behavioral feature set.
-
-Derived features resulted in **91 candidate feature columns**.
-
-### Outcome
-
-The personalized ML system was implemented and executed on the PMData participants.
-
----
-
-# 20. ML Feature Availability and Missing Data
-
-### Decision
-
-Evaluate feature availability separately for each participant before interpreting ML results.
-
-### Reason
-
-Longitudinal wearable data can contain:
-
-* missing days;
-* incomplete variables;
-* long missing periods;
-* participant-specific differences in data coverage.
-
-A single global assumption about data availability would therefore be inappropriate.
-
-### Implementation
-
-The feature-availability analysis examined:
-
-* whether a variable exists;
-* whether observations are missing;
-* whether missingness occurs in the initial ten calendar days;
-* whether long missing streaks occur;
-* whether sleep variables require different treatment.
-
-### Outcome
-
-The analysis produced a dedicated feature-availability table and summary.
-
-The documented availability categories were:
-
-| Availability Category                | Count |
-| ------------------------------------ | ----: |
-| `Available_With_Missing`             |   115 |
-| `Available`                          |    69 |
-| `Available_Sleep_Exempt`             |    14 |
-| `Available_With_Long_Missing_Streak` |     9 |
-| `Missing_Column`                     |     1 |
-| `Excluded_First_10_Days_Missing`     |     0 |
-
-Missingness was therefore documented explicitly rather than silently ignored.
-
----
-
-# 21. Personalized ML Models
-
-### Decision
-
-Train separate models for each participant and each well-being target rather than training one universal model for all participants.
-
-### Reason
-
-The central research framework is personalized.
-
-Different participants can have different:
-
-* normal activity levels;
-* sleep patterns;
-* variability;
-* behavioral relationships;
-* responses over time.
-
-A single population-level model could therefore obscure individual patterns.
-
-### Targets
-
-Five well-being-related targets were modeled:
-
-1. `fatigue`
-2. `mood`
-3. `readiness`
-4. `sleep_quality`
-5. `stress`
-
-### Model Count
-
-With:
-
-* 16 participants;
-* 5 well-being targets;
-
-the complete ML pipeline produces:
-
-$$
-16 \times 5 = 80
-$$
-
-participant-specific models.
-
-### Outcome
-
-**80 personalized models** were trained and evaluated.
-
----
-
-# 22. ML Model Evaluation
-
-### Decision
-
-Evaluate the personalized models using:
-
-* \(R^2\);
-* MAE;
-* RMSE.
-
-### Reason
-
-A single performance measure does not fully describe predictive performance.
-
-The three metrics provide complementary information about:
-
-* explained variance;
-* absolute prediction error;
-* root-mean-square prediction error.
-
-### Results Across 80 Models
-
-| Metric           |  Result |
-| ---------------- | ------: |
-| Models           |      80 |
-| Positive \(R^2\) |      14 |
-| Zero \(R^2\)     |       1 |
-| Negative \(R^2\) |      65 |
-| Mean \(R^2\)     | -0.1147 |
-| Median \(R^2\)   | -0.0903 |
-| Mean MAE         |  0.6871 |
-| Mean RMSE        |  0.9236 |
-
-### Interpretation
-
-The results show substantial variation between participant-specific models.
-
-Most models did not achieve positive \(R^2\).
-
-Therefore, the current dataset and modeling configuration do not provide evidence of strong general predictive performance across participants.
-
-The ML component should consequently be interpreted as an **implemented and evaluated research model**, rather than a validated real-world prediction system.
-
----
-
-# 23. Feature Importance
-
-### Decision
-
-Analyze feature importance to identify which behavioral patterns contributed most frequently to participant-specific ML models.
-
-### Reason
-
-Prediction performance alone does not indicate which aspects of daily behavior were used by the models.
-
-Feature-importance analysis provides an additional view of which behavioral variables contributed to model predictions under the implemented modeling procedure.
-
-### Implementation
-
-The ML pipeline produced:
-
-* 7,280 feature-importance rows;
-* 91 derived feature columns;
-* a complete mapping from derived features to the original 13 behavioral variables.
-
-All 91 derived features were successfully mapped to their corresponding original behavioral variables.
-
-### Outcome
-
-Feature importance was examined:
-
-* overall;
-* by participant;
-* by well-being target;
-* among the top three behaviors for each participant × target combination.
-
----
-
-# 24. Interpretation of ML Results
-
-### Decision
-
-Interpret feature-importance results as indicators of **model usage**, rather than causal importance.
-
-### Top-3 Behavioral Frequency
-
-| Behavioral Variable  | Top-3 Appearances |
-| -------------------- | ----------------: |
-| Steps                |                49 |
-| Exercise_Calories    |                30 |
-| Sleep_Restlessness   |                28 |
-| Deep_Sleep_Minutes   |                24 |
-| Sleep_Hours          |                24 |
-| Exercise_Duration    |                23 |
-| Sleep_Score          |                20 |
-| Sleep_Duration_Score |                14 |
-| Exercise_Avg_HR      |                13 |
-| Exercise_Distance    |                 6 |
-| Sleep_Revitalization |                 6 |
-| Sleep_Composition    |                 2 |
-| Exercise_Count       |                 1 |
-
-### Interpretation
-
-These frequencies describe model feature usage under the implemented modeling procedure.
-
-They should not be interpreted as causal importance.
-
-A feature appearing frequently among the top model features indicates that it contributed to model predictions under the implemented procedure.
-
-It does not establish that the feature causes changes in well-being.
-
----
-
-# 25. Relationship Between Statistical and ML Analyses
-
-### Decision
-
-Treat the statistical and ML analyses as **complementary rather than interchangeable**.
-
-### Reason
-
-The statistical analysis asks:
-
-> Are behavioral measures associated with well-being-related measures?
-
-The ML analysis asks:
-
-> Can participant-specific behavioral information be used to model changes in well-being?
-
-These are related but different questions.
-
-A behavioral variable can show a statistical association without producing strong predictive performance.
-
-Similarly, a feature can contribute to a model without being statistically significant in the correlation analysis.
-
-### Outcome
-
-The final project uses both approaches to provide complementary evidence.
-
-The statistical analysis provides association-based evidence, while the ML analysis evaluates participant-level predictive modeling.
-
----
-
-# 26. Reproducibility
-
-### Decision
-
-Maintain the complete analysis pipeline in the GitHub repository.
-
-### Repository Structure
-
-```text
-AI-Wellbeing-Project/
-│
-├── Code/
-│   ├── 01_build_baseline.py
-│   ├── 02_same_day_analysis.py
-│   ├── 03_lagged_analysis.py
-│   ├── 04_seven_day_analysis.py
-│   ├── 05_sensitivity_analysis.py
-│   ├── 06_fdr_correction.py
-│   └── 07_final_summary.py
-│
-├── ML/
-│   └── Code/
-│       ├── 08_prepare_ml_data.py
-│       ├── 09_feature_availability.py
-│       ├── 10_personalized_ml.py
-│       └── 11_analyze_ml_results.py
-│
-├── data/
-│   └── pmdata/
-│
-├── results/
-│   ├── baseline/
-│   └── ...
-│
-├── DECISION_LOG.md
-├── README.md
-└── .gitignore
-```
-
-### Reason
-
-The project should be reproducible and auditable.
-
-The repository therefore contains:
-
-* data-processing code;
-* statistical analysis code;
-* machine-learning code;
-* generated analysis results;
-* methodological documentation;
-* decision documentation;
-* version-controlled project history.
-
-### Outcome
-
-The final analysis pipeline was implemented, documented, and maintained in the GitHub repository.
-
----
-
-# 27. AI Use and Research Transparency
-
-### Decision
-
-Use AI assistance for coding support, wording, organization, and methodological discussion while retaining human responsibility for research decisions and interpretation.
-
-### Reason
-
-AI tools were used during the project as a research and coding assistant.
-
-However, AI-generated suggestions were not treated as independent scientific evidence.
-
-### AI-Supported Activities Included
-
-* code development and debugging;
-* restructuring analysis scripts;
-* explaining statistical concepts;
-* improving documentation;
-* improving English wording;
-* organizing research reports;
-* discussing methodological alternatives.
-
-### Research Responsibility
-
-The final methodological choices, interpretation of results, and research conclusions remain the responsibility of the researcher.
-
-AI assistance does not replace understanding of the implemented analyses or responsibility for the final research claims.
-
----
-
-# 28. Ethical Interpretation and Limitations
-
-### Decision
-
-Interpret behavioral deviations as **potential signals**, not diagnoses or proof of health problems.
-
-### Reason
-
-An unusual behavioral pattern can have many possible explanations.
-
-For example:
-
-* unusually low activity could reflect illness, fatigue, schedule changes, or other circumstances;
-* unusually high activity could also reflect different personal or situational factors;
-* unusual sleep duration may have multiple possible explanations.
-
-The current analysis cannot determine the underlying cause of a behavioral deviation.
-
-### Limitations
-
-Important limitations include:
-
-* small participant sample (\(N=16\));
-* unequal data availability;
-* missing observations;
-* participant-specific models with limited observations;
-* observational rather than experimental data;
-* correlation does not establish causality;
-* current ML predictive performance was generally limited;
-* no clinical validation;
-* no external validation cohort;
-* well-being was represented by five self-reported indicators rather than a complete multidimensional measurement of well-being.
-
-### Ethical Position
-
-The system should therefore be described as a **research and early-warning framework**, not as a diagnostic system.
-
-A detected behavioral deviation should be considered a potential signal for further investigation rather than evidence of a health condition.
-
----
-
-# 29. Final Methodological Position
-
-### Decision
-
-The final project combines:
-
-* personalized behavioral baselines;
-* deviation detection;
-* temporal statistical analysis;
-* multiple-testing correction;
-* personalized machine learning;
-* model evaluation;
-* feature-importance analysis.
-
-### Final Methodological Pipeline
-
-```text
-                         PMData
-                           │
-                           ▼
-              Participant-level preparation
-                           │
-                           ▼
-                  13 behavioral variables
-                           │
-                           ▼
-             Personalized chronological baseline
-                           │
-                           ▼
-                Daily personalized deviations
-                           │
-                ┌──────────┴──────────┐
-                │                     │
-                ▼                     ▼
-          |Z| ≥ 2 primary       |Z| ≥ 1 sensitivity
-                │                     │
-                └──────────┬──────────┘
-                           ▼
-                  Statistical analyses
-                           │
-              ┌────────────┼────────────┐
-              ▼            ▼            ▼
-          Same-day     One-day lag   Seven-day
-              │            │            │
-              └────────────┼────────────┘
-                           ▼
-                   Pearson correlation
-                           │
-                           ▼
-              Benjamini–Hochberg FDR
-                           │
-                           ▼
-                 Final statistical results
-                           │
-                           ▼
-                 Personalized ML preparation
-                           │
-                           ▼
-                  91 derived features
-                           │
-                           ▼
-                 16 participants ×
-                 5 well-being targets
-                           │
-                           ▼
-                     80 ML models
-                           │
-                           ▼
-               R² / MAE / RMSE evaluation
-                           │
-                           ▼
-                  Feature-importance analysis
-                           │
-                           ▼
-             Personalized behavioral signals
-```
-
-### Final Research Position
-
-The project provides a framework for studying whether changes in an individual's daily behavioral patterns can be associated with changes in well-being.
-
-The statistical analyses identified FDR-significant associations across:
-
-* same-day analysis;
-* one-day lagged analysis;
-* seven-day historical analysis;
-* and the separate sensitivity analysis.
-
-The machine-learning system was successfully implemented and evaluated at the participant level.
-
-However, overall predictive performance was limited, with most participant-specific models producing non-positive \(R^2\) values.
-
-Therefore, the current results support the **feasibility of investigating personalized behavioral signals of well-being**, but they do not establish a clinically validated prediction system.
-
-The central concept of the project remains:
-
-> **Learn the individual's normal behavior → detect unusual deviations → examine their relationship with well-being → evaluate whether these patterns can support personalized early detection.**
-
-### Future Work
-
-Future development should focus on:
-
-1. larger longitudinal datasets;
-2. additional participants;
-3. stronger temporal validation;
-4. improved predictive modeling;
-5. more robust missing-data strategies;
-6. external validation;
-7. additional well-being measures;
-8. improved feature engineering;
-9. comparison of personalized and population-level models;
-10. independent validation datasets;
-11. careful assessment before any real-world deployment.
-
----
-
-# Final Status
-
-The current project contains a complete research pipeline covering:
-
-* personalized baseline construction;
-* behavioral deviation detection;
-* primary and sensitivity thresholds;
-* same-day statistical analysis;
-* one-day lagged analysis;
-* seven-day historical analysis;
-* multiple-testing correction;
-* final statistical summaries;
-* ML data preparation;
-* feature-availability analysis;
-* personalized ML modeling;
-* model evaluation;
-* feature-importance analysis;
-* methodological documentation;
-* and reproducibility documentation.
-
-The project is intended as a **research framework for personalized investigation of behavioral signals of well-being**, not as a clinical diagnostic or validated prediction system.
