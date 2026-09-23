@@ -1,3 +1,4 @@
+import os
 import pandas as pd
 import numpy as np
 
@@ -45,7 +46,7 @@ SUMMARY_FILE = os.path.join(
 
 
 # ============================================================
-# 2. METRICS
+# 2. METRIC FUNCTION
 # ============================================================
 
 def calculate_metrics(actual, predicted):
@@ -80,12 +81,17 @@ def calculate_metrics(actual, predicted):
 
 
 # ============================================================
-# 3. LOAD FILES
+# 3. START
 # ============================================================
 
 print("=" * 80)
 print("ML PREDICTION TEST")
 print("=" * 80)
+
+
+# ============================================================
+# 4. CHECK INPUT FILES
+# ============================================================
 
 if not os.path.exists(PREDICTIONS_FILE):
     raise FileNotFoundError(
@@ -96,6 +102,11 @@ if not os.path.exists(WELLBEING_FILE):
     raise FileNotFoundError(
         f"Wellbeing index file not found:\n{WELLBEING_FILE}"
     )
+
+
+# ============================================================
+# 5. LOAD DATA
+# ============================================================
 
 predictions = pd.read_csv(
     PREDICTIONS_FILE
@@ -115,47 +126,51 @@ print(
 
 
 # ============================================================
-# 4. CHECK COLUMNS
+# 6. CHECK REQUIRED COLUMNS
 # ============================================================
 
-prediction_columns = [
+required_prediction_columns = [
     "participant_id",
     "target_date",
     "predicted_wellbeing",
     "prediction_status"
 ]
 
-wellbeing_columns = [
+required_wellbeing_columns = [
     "participant_id",
     "date",
     "Wellbeing_Index"
 ]
 
-missing_prediction = [
-    col for col in prediction_columns
-    if col not in predictions.columns
+missing_prediction_columns = [
+    column
+    for column in required_prediction_columns
+    if column not in predictions.columns
 ]
 
-missing_wellbeing = [
-    col for col in wellbeing_columns
-    if col not in wellbeing.columns
+missing_wellbeing_columns = [
+    column
+    for column in required_wellbeing_columns
+    if column not in wellbeing.columns
 ]
 
-if missing_prediction:
+if missing_prediction_columns:
+
     raise ValueError(
         "Missing prediction columns:\n"
-        + "\n".join(missing_prediction)
+        + "\n".join(missing_prediction_columns)
     )
 
-if missing_wellbeing:
+if missing_wellbeing_columns:
+
     raise ValueError(
         "Missing wellbeing columns:\n"
-        + "\n".join(missing_wellbeing)
+        + "\n".join(missing_wellbeing_columns)
     )
 
 
 # ============================================================
-# 5. PREPARE DATA
+# 7. PREPARE DATES AND NUMERIC VALUES
 # ============================================================
 
 predictions["target_date"] = pd.to_datetime(
@@ -180,13 +195,12 @@ wellbeing["Wellbeing_Index"] = pd.to_numeric(
 
 
 # ============================================================
-# 6. KEEP ACTUAL PREDICTIONS
+# 8. KEEP ONLY ACTUAL PREDICTIONS
 # ============================================================
 
 predictions = predictions[
     predictions["prediction_status"] == "Predicted"
 ].copy()
-
 
 print(
     f"Predicted rows available for testing: "
@@ -195,7 +209,7 @@ print(
 
 
 # ============================================================
-# 7. MERGE PREDICTIONS WITH ACTUAL WELLBEING
+# 9. MATCH ACTUAL WELLBEING VALUES
 # ============================================================
 
 evaluation_df = predictions.merge(
@@ -217,7 +231,6 @@ evaluation_df = predictions.merge(
     how="left"
 )
 
-
 evaluation_df = evaluation_df.rename(
     columns={
         "Wellbeing_Index": "actual_wellbeing"
@@ -226,7 +239,7 @@ evaluation_df = evaluation_df.rename(
 
 
 # ============================================================
-# 8. KEEP ROWS WITH ACTUAL VALUES
+# 10. KEEP ONLY COMPLETE PAIRS
 # ============================================================
 
 evaluation_df = evaluation_df.dropna(
@@ -236,14 +249,13 @@ evaluation_df = evaluation_df.dropna(
     ]
 ).copy()
 
-
 print(
     f"Rows with both predicted and actual wellbeing: "
     f"{len(evaluation_df)}"
 )
 
-
 if len(evaluation_df) == 0:
+
     raise ValueError(
         "No prediction rows could be matched with "
         "actual Wellbeing_Index values."
@@ -251,7 +263,7 @@ if len(evaluation_df) == 0:
 
 
 # ============================================================
-# 9. OVERALL METRICS
+# 11. OVERALL METRICS
 # ============================================================
 
 overall_mae, overall_rmse, overall_r2 = calculate_metrics(
@@ -259,20 +271,21 @@ overall_mae, overall_rmse, overall_r2 = calculate_metrics(
     evaluation_df["predicted_wellbeing"]
 )
 
-
-overall_table = pd.DataFrame([
-    {
-        "Level": "Overall",
-        "N": len(evaluation_df),
-        "MAE": overall_mae,
-        "RMSE": overall_rmse,
-        "R2": overall_r2
-    }
-])
+overall_table = pd.DataFrame(
+    [
+        {
+            "Level": "Overall",
+            "N": len(evaluation_df),
+            "MAE": overall_mae,
+            "RMSE": overall_rmse,
+            "R2": overall_r2
+        }
+    ]
+)
 
 
 # ============================================================
-# 10. PARTICIPANT-LEVEL METRICS
+# 12. PARTICIPANT-LEVEL METRICS
 # ============================================================
 
 participant_results = []
@@ -306,7 +319,7 @@ participant_table = pd.DataFrame(
 
 
 # ============================================================
-# 11. SAVE TABLES
+# 13. SAVE RESULT TABLES
 # ============================================================
 
 participant_table.to_csv(
@@ -321,25 +334,35 @@ overall_table.to_csv(
 
 
 # ============================================================
-# 12. SUMMARY
+# 14. PARTICIPANT SUMMARY
 # ============================================================
 
 if len(participant_table) > 0:
 
-    mean_mae = participant_table["MAE"].mean()
+    mean_participant_mae = (
+        participant_table["MAE"].mean()
+    )
 
-    mean_rmse = participant_table["RMSE"].mean()
+    mean_participant_rmse = (
+        participant_table["RMSE"].mean()
+    )
 
-    mean_r2 = participant_table["R2"].mean()
+    mean_participant_r2 = (
+        participant_table["R2"].mean()
+    )
 
 else:
 
-    mean_mae = np.nan
-    mean_rmse = np.nan
-    mean_r2 = np.nan
+    mean_participant_mae = np.nan
+    mean_participant_rmse = np.nan
+    mean_participant_r2 = np.nan
 
 
-summary = [
+# ============================================================
+# 15. TEXT SUMMARY
+# ============================================================
+
+summary_lines = [
     "ML PREDICTION TEST SUMMARY",
     "==========================",
     "",
@@ -361,17 +384,18 @@ summary = [
     "",
     "MEAN PARTICIPANT-LEVEL RESULTS",
     "-------------------------------",
-    f"Mean MAE:  {mean_mae:.4f}",
-    f"Mean RMSE: {mean_rmse:.4f}",
-    f"Mean R2:   {mean_r2:.4f}",
+    f"Mean MAE:  {mean_participant_mae:.4f}",
+    f"Mean RMSE: {mean_participant_rmse:.4f}",
+    f"Mean R2:   {mean_participant_r2:.4f}",
     "",
     "Metric interpretation:",
     "MAE = mean absolute prediction error.",
     "RMSE = root mean squared prediction error.",
     "R2 = proportion of variance explained by predictions.",
     "",
-    "The test compares the ML predictions with the actual",
-    "Wellbeing_Index values for the same participant and date.",
+    "The test compares predicted Wellbeing_Index values",
+    "with the actual Wellbeing_Index values for the same",
+    "participant and target date."
 ]
 
 
@@ -379,15 +403,15 @@ with open(
     SUMMARY_FILE,
     "w",
     encoding="utf-8"
-) as f:
+) as file:
 
-    f.write(
-        "\n".join(summary)
+    file.write(
+        "\n".join(summary_lines)
     )
 
 
 # ============================================================
-# 13. PRINT RESULTS
+# 16. PRINT RESULTS
 # ============================================================
 
 print()
@@ -406,6 +430,7 @@ print(
 print(
     f"R2  :  {overall_r2:.4f}"
 )
+
 
 print()
 print("-" * 80)
@@ -449,4 +474,3 @@ print()
 print("=" * 80)
 print("PREDICTION TEST COMPLETE")
 print("=" * 80)
-PY
