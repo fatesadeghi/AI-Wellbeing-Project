@@ -1,0 +1,33 @@
+ML PREDICTION TEST SUMMARY
+==========================
+
+Prediction framework:
+Personalized Random Forest
+Training: all available past data for each participant
+Prediction features: previous 7 calendar days
+Target: same-day Wellbeing_Index
+
+Prediction rows loaded: 1863
+Rows evaluated: 1454
+Participants evaluated: 16
+
+OVERALL RESULTS
+---------------
+MAE:  0.2763
+RMSE: 0.3578
+R2:   -0.1451
+
+MEAN PARTICIPANT-LEVEL RESULTS
+-------------------------------
+Mean MAE:  0.2713
+Mean RMSE: 0.3527
+Mean R2:   -0.1513
+
+Metric interpretation:
+MAE = mean absolute prediction error.
+RMSE = root mean squared prediction error.
+R2 = proportion of variance explained by predictions.
+
+The test compares predicted Wellbeing_Index values
+with the actual Wellbeing_Index values for the same
+participant and target date.
