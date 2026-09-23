@@ -1,3 +1,4 @@
+cat > ML/05_test_predictions.py <<'PY'
 import os
 import pandas as pd
 import numpy as np
@@ -24,9 +25,19 @@ PREDICTIONS_FILE = os.path.join(
     "wellbeing_predictions_full.csv"
 )
 
-OUTPUT_FILE = os.path.join(
+WELLBEING_FILE = os.path.join(
     RESULTS_DIR,
-    "prediction_test_report.csv"
+    "wellbeing_index.csv"
+)
+
+PARTICIPANT_OUTPUT = os.path.join(
+    RESULTS_DIR,
+    "prediction_test_by_participant.csv"
+)
+
+OVERALL_OUTPUT = os.path.join(
+    RESULTS_DIR,
+    "prediction_test_overall.csv"
 )
 
 SUMMARY_FILE = os.path.join(
@@ -36,7 +47,7 @@ SUMMARY_FILE = os.path.join(
 
 
 # ============================================================
-# 2. METRIC FUNCTIONS
+# 2. METRICS
 # ============================================================
 
 def calculate_metrics(actual, predicted):
@@ -46,7 +57,9 @@ def calculate_metrics(actual, predicted):
 
     errors = predicted - actual
 
-    mae = np.mean(np.abs(errors))
+    mae = np.mean(
+        np.abs(errors)
+    )
 
     rmse = np.sqrt(
         np.mean(errors ** 2)
@@ -69,7 +82,7 @@ def calculate_metrics(actual, predicted):
 
 
 # ============================================================
-# 3. LOAD PREDICTIONS
+# 3. LOAD FILES
 # ============================================================
 
 print("=" * 80)
@@ -81,56 +94,144 @@ if not os.path.exists(PREDICTIONS_FILE):
         f"Prediction file not found:\n{PREDICTIONS_FILE}"
     )
 
-df = pd.read_csv(PREDICTIONS_FILE)
+if not os.path.exists(WELLBEING_FILE):
+    raise FileNotFoundError(
+        f"Wellbeing index file not found:\n{WELLBEING_FILE}"
+    )
 
-print(f"Prediction rows loaded: {len(df)}")
+predictions = pd.read_csv(
+    PREDICTIONS_FILE
+)
+
+wellbeing = pd.read_csv(
+    WELLBEING_FILE
+)
+
+print(
+    f"Prediction rows loaded: {len(predictions)}"
+)
+
+print(
+    f"Wellbeing rows loaded: {len(wellbeing)}"
+)
 
 
 # ============================================================
-# 4. CHECK REQUIRED COLUMNS
+# 4. CHECK COLUMNS
 # ============================================================
 
-required_columns = [
-    "participant",
+prediction_columns = [
+    "participant_id",
     "target_date",
     "predicted_wellbeing",
-    "actual_wellbeing"
+    "prediction_status"
 ]
 
-missing_columns = [
-    col for col in required_columns
-    if col not in df.columns
+wellbeing_columns = [
+    "participant_id",
+    "date",
+    "Wellbeing_Index"
 ]
 
-if missing_columns:
+missing_prediction = [
+    col for col in prediction_columns
+    if col not in predictions.columns
+]
+
+missing_wellbeing = [
+    col for col in wellbeing_columns
+    if col not in wellbeing.columns
+]
+
+if missing_prediction:
     raise ValueError(
-        "Missing required columns:\n"
-        + "\n".join(missing_columns)
+        "Missing prediction columns:\n"
+        + "\n".join(missing_prediction)
+    )
+
+if missing_wellbeing:
+    raise ValueError(
+        "Missing wellbeing columns:\n"
+        + "\n".join(missing_wellbeing)
     )
 
 
 # ============================================================
-# 5. CLEAN DATA
+# 5. PREPARE DATA
 # ============================================================
 
-df["target_date"] = pd.to_datetime(
-    df["target_date"],
+predictions["target_date"] = pd.to_datetime(
+    predictions["target_date"],
     errors="coerce"
 )
 
-df["predicted_wellbeing"] = pd.to_numeric(
-    df["predicted_wellbeing"],
+wellbeing["date"] = pd.to_datetime(
+    wellbeing["date"],
     errors="coerce"
 )
 
-df["actual_wellbeing"] = pd.to_numeric(
-    df["actual_wellbeing"],
+predictions["predicted_wellbeing"] = pd.to_numeric(
+    predictions["predicted_wellbeing"],
+    errors="coerce"
+)
+
+wellbeing["Wellbeing_Index"] = pd.to_numeric(
+    wellbeing["Wellbeing_Index"],
     errors="coerce"
 )
 
 
-# Only rows where both prediction and actual value exist
-evaluation_df = df.dropna(
+# ============================================================
+# 6. KEEP ACTUAL PREDICTIONS
+# ============================================================
+
+predictions = predictions[
+    predictions["prediction_status"] == "Predicted"
+].copy()
+
+
+print(
+    f"Predicted rows available for testing: "
+    f"{len(predictions)}"
+)
+
+
+# ============================================================
+# 7. MERGE PREDICTIONS WITH ACTUAL WELLBEING
+# ============================================================
+
+evaluation_df = predictions.merge(
+    wellbeing[
+        [
+            "participant_id",
+            "date",
+            "Wellbeing_Index"
+        ]
+    ],
+    left_on=[
+        "participant_id",
+        "target_date"
+    ],
+    right_on=[
+        "participant_id",
+        "date"
+    ],
+    how="left"
+)
+
+
+evaluation_df = evaluation_df.rename(
+    columns={
+        "Wellbeing_Index": "actual_wellbeing"
+    }
+)
+
+
+# ============================================================
+# 8. KEEP ROWS WITH ACTUAL VALUES
+# ============================================================
+
+evaluation_df = evaluation_df.dropna(
     subset=[
         "predicted_wellbeing",
         "actual_wellbeing"
@@ -139,19 +240,21 @@ evaluation_df = df.dropna(
 
 
 print(
-    f"Rows with both prediction and actual wellbeing: "
+    f"Rows with both predicted and actual wellbeing: "
     f"{len(evaluation_df)}"
 )
 
 
-# ============================================================
-# 6. OVERALL TEST
-# ============================================================
-
 if len(evaluation_df) == 0:
     raise ValueError(
-        "No rows contain both predicted and actual wellbeing."
+        "No prediction rows could be matched with "
+        "actual Wellbeing_Index values."
     )
+
+
+# ============================================================
+# 9. OVERALL METRICS
+# ============================================================
 
 overall_mae, overall_rmse, overall_r2 = calculate_metrics(
     evaluation_df["actual_wellbeing"],
@@ -159,14 +262,25 @@ overall_mae, overall_rmse, overall_r2 = calculate_metrics(
 )
 
 
+overall_table = pd.DataFrame([
+    {
+        "Level": "Overall",
+        "N": len(evaluation_df),
+        "MAE": overall_mae,
+        "RMSE": overall_rmse,
+        "R2": overall_r2
+    }
+])
+
+
 # ============================================================
-# 7. PARTICIPANT-LEVEL TEST
+# 10. PARTICIPANT-LEVEL METRICS
 # ============================================================
 
 participant_results = []
 
-for participant, group in evaluation_df.groupby(
-    "participant"
+for participant_id, group in evaluation_df.groupby(
+    "participant_id"
 ):
 
     if len(group) < 2:
@@ -177,54 +291,57 @@ for participant, group in evaluation_df.groupby(
         group["predicted_wellbeing"]
     )
 
-    participant_results.append({
-        "Participant": participant,
-        "N": len(group),
-        "MAE": mae,
-        "RMSE": rmse,
-        "R2": r2
-    })
+    participant_results.append(
+        {
+            "Participant": participant_id,
+            "N": len(group),
+            "MAE": mae,
+            "RMSE": rmse,
+            "R2": r2
+        }
+    )
 
 
-participant_results_df = pd.DataFrame(
+participant_table = pd.DataFrame(
     participant_results
 )
 
 
 # ============================================================
-# 8. SAVE PARTICIPANT TABLE
+# 11. SAVE TABLES
 # ============================================================
 
-participant_results_df.to_csv(
-    OUTPUT_FILE,
+participant_table.to_csv(
+    PARTICIPANT_OUTPUT,
+    index=False
+)
+
+overall_table.to_csv(
+    OVERALL_OUTPUT,
     index=False
 )
 
 
 # ============================================================
-# 9. SUMMARY REPORT
+# 12. SUMMARY
 # ============================================================
 
-mean_participant_mae = (
-    participant_results_df["MAE"].mean()
-    if len(participant_results_df) > 0
-    else np.nan
-)
+if len(participant_table) > 0:
 
-mean_participant_rmse = (
-    participant_results_df["RMSE"].mean()
-    if len(participant_results_df) > 0
-    else np.nan
-)
+    mean_mae = participant_table["MAE"].mean()
 
-mean_participant_r2 = (
-    participant_results_df["R2"].mean()
-    if len(participant_results_df) > 0
-    else np.nan
-)
+    mean_rmse = participant_table["RMSE"].mean()
+
+    mean_r2 = participant_table["R2"].mean()
+
+else:
+
+    mean_mae = np.nan
+    mean_rmse = np.nan
+    mean_r2 = np.nan
 
 
-summary_lines = [
+summary = [
     "ML PREDICTION TEST SUMMARY",
     "==========================",
     "",
@@ -234,9 +351,9 @@ summary_lines = [
     "Prediction features: previous 7 calendar days",
     "Target: same-day Wellbeing_Index",
     "",
-    f"Prediction rows loaded: {len(df)}",
+    f"Prediction rows loaded: {len(predictions)}",
     f"Rows evaluated: {len(evaluation_df)}",
-    f"Participants evaluated: {len(participant_results_df)}",
+    f"Participants evaluated: {len(participant_table)}",
     "",
     "OVERALL RESULTS",
     "---------------",
@@ -246,15 +363,17 @@ summary_lines = [
     "",
     "MEAN PARTICIPANT-LEVEL RESULTS",
     "-------------------------------",
-    f"Mean MAE:  {mean_participant_mae:.4f}",
-    f"Mean RMSE: {mean_participant_rmse:.4f}",
-    f"Mean R2:   {mean_participant_r2:.4f}",
+    f"Mean MAE:  {mean_mae:.4f}",
+    f"Mean RMSE: {mean_rmse:.4f}",
+    f"Mean R2:   {mean_r2:.4f}",
     "",
-    "Interpretation:",
-    "MAE and RMSE measure prediction error.",
-    "Lower MAE and RMSE indicate smaller prediction errors.",
-    "R2 describes how much variation in the actual wellbeing",
-    "values is explained by the predictions.",
+    "Metric interpretation:",
+    "MAE = mean absolute prediction error.",
+    "RMSE = root mean squared prediction error.",
+    "R2 = proportion of variance explained by predictions.",
+    "",
+    "The test compares the ML predictions with the actual",
+    "Wellbeing_Index values for the same participant and date.",
 ]
 
 
@@ -265,12 +384,12 @@ with open(
 ) as f:
 
     f.write(
-        "\n".join(summary_lines)
+        "\n".join(summary)
     )
 
 
 # ============================================================
-# 10. PRINT RESULTS
+# 13. PRINT RESULTS
 # ============================================================
 
 print()
@@ -295,17 +414,21 @@ print("-" * 80)
 print("PARTICIPANT-LEVEL RESULTS")
 print("-" * 80)
 
-if len(participant_results_df) > 0:
+if len(participant_table) > 0:
+
     print(
-        participant_results_df.to_string(
+        participant_table.to_string(
             index=False
         )
     )
+
 else:
+
     print(
         "No participants had enough observations "
         "for participant-level evaluation."
     )
+
 
 print()
 print("-" * 80)
@@ -313,14 +436,19 @@ print("SAVED")
 print("-" * 80)
 
 print(
-    f"Participant report:\n{OUTPUT_FILE}"
+    f"Participant table:\n{PARTICIPANT_OUTPUT}"
 )
 
 print(
-    f"Summary report:\n{SUMMARY_FILE}"
+    f"Overall table:\n{OVERALL_OUTPUT}"
+)
+
+print(
+    f"Summary:\n{SUMMARY_FILE}"
 )
 
 print()
 print("=" * 80)
 print("PREDICTION TEST COMPLETE")
 print("=" * 80)
+PY
