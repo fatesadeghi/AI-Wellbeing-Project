@@ -1,11 +1,15 @@
 import os
-import glob
 import pandas as pd
 
 
 # ============================================================
 # FINAL SUMMARY
-# Summary of analyses 01–05
+# Summary of the final seven-day analysis
+# ============================================================
+
+
+# ============================================================
+# 1. PROJECT PATHS
 # ============================================================
 
 BASE_DIR = os.path.dirname(
@@ -19,273 +23,288 @@ RESULTS_DIR = os.path.join(
     "results"
 )
 
+SEVEN_DAY_DIR = os.path.join(
+    RESULTS_DIR,
+    "seven_day"
+)
+
+SEVEN_DAY_FILE = os.path.join(
+    SEVEN_DAY_DIR,
+    "seven_day_history_wellbeing_relationships.csv"
+)
+
 OUTPUT_DIR = os.path.join(
     RESULTS_DIR,
     "final_summary"
 )
 
-os.makedirs(OUTPUT_DIR, exist_ok=True)
-
-
-# ============================================================
-# FIND RESULT FILE
-# ============================================================
-
-def find_result(patterns):
-
-    for pattern in patterns:
-
-        matches = glob.glob(
-            os.path.join(
-                RESULTS_DIR,
-                "**",
-                pattern
-            ),
-            recursive=True
-        )
-
-        matches = [
-            path for path in matches
-            if os.path.abspath(OUTPUT_DIR)
-            not in os.path.abspath(path)
-        ]
-
-        if matches:
-            return matches[0]
-
-    return None
-
-
-# ============================================================
-# LOAD RESULTS
-# ============================================================
-
-files = {
-    "01_build_baseline": find_result([
-        "*baseline*.csv"
-    ]),
-
-    "02_same_day_analysis": find_result([
-        "*same_day*.csv",
-        "*same-day*.csv"
-    ]),
-
-    "03_lagged_analysis": find_result([
-        "*lagged*.csv",
-        "*lag*.csv"
-    ]),
-
-    "04_seven_day_analysis": find_result([
-        "*seven_day_history_wellbeing_relationships*.csv",
-        "*seven_day*.csv"
-    ]),
-
-    "05_sensitivity_analysis": find_result([
-        "*sensitivity*.csv"
-    ])
-}
-
-
-# ============================================================
-# GENERAL SUMMARY
-# ============================================================
-
-summary_rows = []
-
-
-for analysis, path in files.items():
-
-    row = {
-        "Analysis": analysis,
-        "File_Found": path is not None
-    }
-
-    if path is None:
-        summary_rows.append(row)
-        continue
-
-    df = pd.read_csv(path)
-
-    row["Rows"] = len(df)
-    row["Columns"] = len(df.columns)
-
-    if "Participant" in df.columns:
-        row["Participants"] = df["Participant"].nunique()
-
-    if "r" in df.columns:
-
-        r = pd.to_numeric(
-            df["r"],
-            errors="coerce"
-        )
-
-        row["Valid_r"] = r.notna().sum()
-        row["Mean_r"] = r.mean()
-        row["Mean_abs_r"] = r.abs().mean()
-
-    if "p" in df.columns:
-
-        p = pd.to_numeric(
-            df["p"],
-            errors="coerce"
-        )
-
-        valid_p = p.dropna()
-
-        row["Valid_p"] = len(valid_p)
-        row["p_less_0_05"] = (
-            valid_p < 0.05
-        ).sum()
-
-    if "Behavioral_Variable" in df.columns:
-        row["Behavioral_Variables"] = (
-            df["Behavioral_Variable"]
-            .nunique()
-        )
-
-    if "Wellbeing_Variable" in df.columns:
-        row["Wellbeing_Variables"] = (
-            df["Wellbeing_Variable"]
-            .nunique()
-        )
-
-    summary_rows.append(row)
-
-
-summary_df = pd.DataFrame(
-    summary_rows
+os.makedirs(
+    OUTPUT_DIR,
+    exist_ok=True
 )
 
 
 # ============================================================
-# SAVE GENERAL SUMMARY
+# 2. CHECK INPUT
 # ============================================================
 
-summary_df.to_csv(
-    os.path.join(
-        OUTPUT_DIR,
-        "final_analysis_summary.csv"
+if not os.path.exists(SEVEN_DAY_FILE):
+
+    raise FileNotFoundError(
+        "Seven-day analysis result not found:\n"
+        f"{SEVEN_DAY_FILE}"
+    )
+
+
+# ============================================================
+# 3. LOAD SEVEN-DAY RESULTS
+# ============================================================
+
+print("=" * 80)
+print("FINAL SUMMARY")
+print("=" * 80)
+
+print(
+    f"Loading seven-day results:\n"
+    f"{SEVEN_DAY_FILE}"
+)
+
+df = pd.read_csv(
+    SEVEN_DAY_FILE
+)
+
+
+# ============================================================
+# 4. BASIC VALIDATION
+# ============================================================
+
+required_columns = [
+    "Participant",
+    "Behavioral_Variable",
+    "Wellbeing_Variable",
+    "r",
+    "p",
+    "N",
+    "Included",
+]
+
+missing_columns = [
+    column
+    for column in required_columns
+    if column not in df.columns
+]
+
+if missing_columns:
+
+    raise ValueError(
+        "Missing required columns in seven-day results: "
+        + ", ".join(missing_columns)
+    )
+
+
+# ============================================================
+# 5. GENERAL SUMMARY
+# ============================================================
+
+included = df[
+    df["Included"] == "Yes"
+].copy()
+
+included["r"] = pd.to_numeric(
+    included["r"],
+    errors="coerce"
+)
+
+included["p"] = pd.to_numeric(
+    included["p"],
+    errors="coerce"
+)
+
+valid_r = included[
+    included["r"].notna()
+]
+
+valid_p = included[
+    included["p"].notna()
+]
+
+summary = {
+    "Analysis": "Seven-day history",
+    "History_Definition": (
+        "Previous 7 days -> same-day wellbeing"
     ),
+    "Participants": (
+        df["Participant"].nunique()
+    ),
+    "Total_Relationships_Tested": (
+        len(df)
+    ),
+    "Relationships_With_N_>=_10": (
+        len(included)
+    ),
+    "Valid_Correlations": (
+        len(valid_r)
+    ),
+    "Mean_r": (
+        valid_r["r"].mean()
+        if not valid_r.empty
+        else None
+    ),
+    "Mean_absolute_r": (
+        valid_r["r"].abs().mean()
+        if not valid_r.empty
+        else None
+    ),
+    "Nominally_Significant_p_<_.05": (
+        (valid_p["p"] < 0.05).sum()
+    ),
+    "Behavioral_Variables": (
+        df["Behavioral_Variable"].nunique()
+    ),
+    "Wellbeing_Variables": (
+        df["Wellbeing_Variable"].nunique()
+    ),
+}
+
+summary_df = pd.DataFrame(
+    [summary]
+)
+
+
+# ============================================================
+# 6. SAVE GENERAL SUMMARY
+# ============================================================
+
+summary_file = os.path.join(
+    OUTPUT_DIR,
+    "final_analysis_summary.csv"
+)
+
+summary_df.to_csv(
+    summary_file,
     index=False
 )
 
 
 # ============================================================
-# SEVEN-DAY ANALYSIS
+# 7. NOMINALLY SIGNIFICANT ASSOCIATIONS
 # ============================================================
 
-seven_day_file = files[
-    "04_seven_day_analysis"
-]
+significant = valid_p[
+    valid_p["p"] < 0.05
+].copy()
+
+significant = significant.sort_values(
+    "p"
+)
 
 
-if seven_day_file is not None:
+significant_file = os.path.join(
+    OUTPUT_DIR,
+    "seven_day_nominally_significant.csv"
+)
 
-    df = pd.read_csv(
-        seven_day_file
+significant.to_csv(
+    significant_file,
+    index=False
+)
+
+
+# ============================================================
+# 8. SUMMARY BY WELLBEING
+# ============================================================
+
+if not significant.empty:
+
+    wellbeing_summary = (
+        significant
+        .groupby(
+            "Wellbeing_Variable"
+        )
+        .size()
+        .reset_index(
+            name="Nominally_Significant_Associations"
+        )
+        .sort_values(
+            "Nominally_Significant_Associations",
+            ascending=False
+        )
     )
 
-    if (
-        "p" in df.columns
-        and "Wellbeing_Variable" in df.columns
-    ):
+else:
 
-        p = pd.to_numeric(
-            df["p"],
-            errors="coerce"
-        )
+    wellbeing_summary = pd.DataFrame(
+        columns=[
+            "Wellbeing_Variable",
+            "Nominally_Significant_Associations",
+        ]
+    )
 
-        significant = df[
-            p < 0.05
-        ].copy()
 
-        # ----------------------------------------
-        # By wellbeing measure
-        # ----------------------------------------
+wellbeing_file = os.path.join(
+    OUTPUT_DIR,
+    "seven_day_summary_by_wellbeing.csv"
+)
 
-        if not significant.empty:
-
-            wellbeing_summary = (
-                significant
-                .groupby(
-                    "Wellbeing_Variable"
-                )
-                .size()
-                .reset_index(
-                    name="Significant_Associations"
-                )
-                .sort_values(
-                    "Significant_Associations",
-                    ascending=False
-                )
-            )
-
-            wellbeing_summary.to_csv(
-                os.path.join(
-                    OUTPUT_DIR,
-                    "seven_day_summary_by_wellbeing.csv"
-                ),
-                index=False
-            )
-
-        # ----------------------------------------
-        # By behavioral variable
-        # ----------------------------------------
-
-        if "Behavioral_Variable" in significant.columns:
-
-            behavior_summary = (
-                significant
-                .groupby(
-                    "Behavioral_Variable"
-                )
-                .size()
-                .reset_index(
-                    name="Significant_Associations"
-                )
-                .sort_values(
-                    "Significant_Associations",
-                    ascending=False
-                )
-            )
-
-            behavior_summary.to_csv(
-                os.path.join(
-                    OUTPUT_DIR,
-                    "seven_day_summary_by_behavior.csv"
-                ),
-                index=False
-            )
-
-        # ----------------------------------------
-        # All significant seven-day relationships
-        # ----------------------------------------
-
-        significant = significant.sort_values(
-            "p"
-        )
-
-        significant.to_csv(
-            os.path.join(
-                OUTPUT_DIR,
-                "seven_day_nominally_significant.csv"
-            ),
-            index=False
-        )
+wellbeing_summary.to_csv(
+    wellbeing_file,
+    index=False
+)
 
 
 # ============================================================
-# TEXT SUMMARY
+# 9. SUMMARY BY BEHAVIOR
 # ============================================================
 
-report_path = os.path.join(
+if not significant.empty:
+
+    behavior_summary = (
+        significant
+        .groupby(
+            "Behavioral_Variable"
+        )
+        .size()
+        .reset_index(
+            name="Nominally_Significant_Associations"
+        )
+        .sort_values(
+            "Nominally_Significant_Associations",
+            ascending=False
+        )
+    )
+
+else:
+
+    behavior_summary = pd.DataFrame(
+        columns=[
+            "Behavioral_Variable",
+            "Nominally_Significant_Associations",
+        ]
+    )
+
+
+behavior_file = os.path.join(
+    OUTPUT_DIR,
+    "seven_day_summary_by_behavior.csv"
+)
+
+behavior_summary.to_csv(
+    behavior_file,
+    index=False
+)
+
+
+# ============================================================
+# 10. TEXT REPORT
+# ============================================================
+
+report_file = os.path.join(
     OUTPUT_DIR,
     "final_summary_report.txt"
 )
 
-
 with open(
-    report_path,
+    report_file,
     "w",
     encoding="utf-8"
 ) as f:
@@ -298,46 +317,120 @@ with open(
         "======================\n\n"
     )
 
-    for _, row in summary_df.iterrows():
+    f.write(
+        "Analysis: Seven-day behavioral history\n"
+    )
 
-        f.write(
-            f"Analysis: {row['Analysis']}\n"
-        )
+    f.write(
+        "History definition: "
+        "Previous 7 days -> same-day wellbeing\n\n"
+    )
 
-        for column in summary_df.columns:
+    f.write(
+        f"Participants: "
+        f"{summary['Participants']}\n"
+    )
 
-            if column == "Analysis":
-                continue
+    f.write(
+        f"Total relationships tested: "
+        f"{summary['Total_Relationships_Tested']}\n"
+    )
 
-            value = row[column]
+    f.write(
+        f"Relationships with N >= 10: "
+        f"{summary['Relationships_With_N_>=_10']}\n"
+    )
 
-            if pd.notna(value):
-                f.write(
-                    f"{column}: {value}\n"
-                )
+    f.write(
+        f"Valid correlations: "
+        f"{summary['Valid_Correlations']}\n"
+    )
 
-        f.write("\n")
+    f.write(
+        f"Mean r: "
+        f"{summary['Mean_r']}\n"
+    )
+
+    f.write(
+        f"Mean absolute r: "
+        f"{summary['Mean_absolute_r']}\n"
+    )
+
+    f.write(
+        f"Nominally significant associations "
+        f"(p < 0.05): "
+        f"{summary['Nominally_Significant_p_<_.05']}\n"
+    )
+
+    f.write(
+        f"Behavioral variables: "
+        f"{summary['Behavioral_Variables']}\n"
+    )
+
+    f.write(
+        f"Wellbeing variables: "
+        f"{summary['Wellbeing_Variables']}\n"
+    )
+
+    f.write("\n")
+
+    f.write(
+        "Note: p < 0.05 results are treated as "
+        "nominally significant exploratory associations. "
+        "They do not establish causality.\n"
+    )
 
 
 # ============================================================
-# CONSOLE OUTPUT
+# 11. CONSOLE OUTPUT
 # ============================================================
 
+print()
 print("=" * 80)
 print("FINAL SUMMARY COMPLETED")
 print("=" * 80)
 
 print(
-    f"Output directory: {OUTPUT_DIR}"
+    f"Participants: "
+    f"{summary['Participants']}"
+)
+
+print(
+    f"Total relationships tested: "
+    f"{summary['Total_Relationships_Tested']}"
+)
+
+print(
+    f"Relationships with N >= 10: "
+    f"{summary['Relationships_With_N_>=_10']}"
+)
+
+print(
+    f"Nominally significant associations: "
+    f"{summary['Nominally_Significant_p_<_.05']}"
 )
 
 print()
 print("Generated files:")
 
-for filename in sorted(
-    os.listdir(OUTPUT_DIR)
-):
+print(
+    "  - final_analysis_summary.csv"
+)
 
-    print(
-        f"  - {filename}"
-    )
+print(
+    "  - final_summary_report.txt"
+)
+
+print(
+    "  - seven_day_nominally_significant.csv"
+)
+
+print(
+    "  - seven_day_summary_by_behavior.csv"
+)
+
+print(
+    "  - seven_day_summary_by_wellbeing.csv"
+)
+
+print("=" * 80)
