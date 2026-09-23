@@ -1,16 +1,11 @@
 import os
 import pandas as pd
+import numpy as np
 import matplotlib.pyplot as plt
 
 
 # ============================================================
-# FINAL RESULTS
-# Summary, table, and chart for the final seven-day analysis
-# ============================================================
-
-
-# ============================================================
-# 1. PROJECT PATHS
+# PATHS
 # ============================================================
 
 BASE_DIR = os.path.dirname(
@@ -19,197 +14,89 @@ BASE_DIR = os.path.dirname(
     )
 )
 
-RESULTS_DIR = os.path.join(
-    BASE_DIR,
-    "results"
-)
-
-INPUT_DIR = os.path.join(
-    RESULTS_DIR,
-    "seven_day"
-)
-
 INPUT_FILE = os.path.join(
-    INPUT_DIR,
+    BASE_DIR,
+    "results",
+    "seven_day",
     "seven_day_history_wellbeing_relationships.csv"
 )
 
 OUTPUT_DIR = os.path.join(
-    RESULTS_DIR,
+    BASE_DIR,
+    "results",
     "final"
 )
 
-os.makedirs(
-    OUTPUT_DIR,
-    exist_ok=True
-)
+os.makedirs(OUTPUT_DIR, exist_ok=True)
 
 
 # ============================================================
-# 2. REQUIRED COLUMNS
+# LOAD RESULTS
 # ============================================================
 
-REQUIRED_COLUMNS = [
+df = pd.read_csv(INPUT_FILE)
+
+required_columns = [
     "Participant",
     "Behavioral_Variable",
     "Wellbeing_Variable",
     "r",
     "p",
     "N",
-    "Included",
+    "Included"
 ]
 
-
-# ============================================================
-# 3. CHECK INPUT FILE
-# ============================================================
-
-if not os.path.exists(INPUT_FILE):
-
-    raise FileNotFoundError(
-        "Final seven-day analysis result was not found:\n"
-        f"{INPUT_FILE}"
-    )
-
-
-# ============================================================
-# 4. LOAD RESULTS
-# ============================================================
-
-print("=" * 80)
-print("FINAL RESULTS")
-print("=" * 80)
-
-print(
-    f"Loading:\n{INPUT_FILE}"
-)
-
-results = pd.read_csv(
-    INPUT_FILE
-)
-
-
-# ============================================================
-# 5. VALIDATE INPUT
-# ============================================================
-
 missing_columns = [
-    column
-    for column in REQUIRED_COLUMNS
-    if column not in results.columns
+    col for col in required_columns
+    if col not in df.columns
 ]
 
 if missing_columns:
-
     raise ValueError(
-        "The input file is missing required columns:\n"
-        + ", ".join(missing_columns)
-    )
-
-
-if results.empty:
-
-    raise ValueError(
-        "The seven-day result file is empty."
+        f"Missing required columns: {missing_columns}"
     )
 
 
 # ============================================================
-# 6. PREPARE NUMERIC COLUMNS
+# FILTER INCLUDED RELATIONSHIPS
 # ============================================================
 
-results["r"] = pd.to_numeric(
-    results["r"],
+included = df[
+    df["Included"].astype(str).str.lower().eq("yes")
+].copy()
+
+included["r"] = pd.to_numeric(
+    included["r"],
     errors="coerce"
 )
 
-results["p"] = pd.to_numeric(
-    results["p"],
+included["p"] = pd.to_numeric(
+    included["p"],
     errors="coerce"
 )
 
-results["N"] = pd.to_numeric(
-    results["N"],
+included["N"] = pd.to_numeric(
+    included["N"],
     errors="coerce"
 )
 
 
 # ============================================================
-# 7. SELECT INCLUDED RELATIONSHIPS
+# BASIC SUMMARY
 # ============================================================
 
-included = results[
-    results["Included"].astype(str).str.strip().str.lower()
-    == "yes"
-].copy()
-
-
-if included.empty:
-
-    raise ValueError(
-        "No relationships were marked as Included == Yes."
-    )
-
-
-# ============================================================
-# 8. VALID CORRELATIONS
-# ============================================================
-
-valid_correlations = included[
-    included["r"].notna()
-].copy()
-
-valid_p_values = included[
-    included["p"].notna()
-].copy()
-
-
-# ============================================================
-# 9. NOMINALLY SIGNIFICANT RELATIONSHIPS
-# ============================================================
-
-nominally_significant = valid_p_values[
-    valid_p_values["p"] < 0.05
-].copy()
-
-nominally_significant = (
-    nominally_significant
-    .sort_values("p")
-    .reset_index(drop=True)
-)
-
-
-# ============================================================
-# 10. SUMMARY STATISTICS
-# ============================================================
-
-participant_count = (
-    included["Participant"]
-    .nunique()
-)
-
-total_relationships = len(results)
+total_relationships = len(df)
 
 included_relationships = len(included)
 
-valid_correlation_count = len(
-    valid_correlations
-)
+valid_correlations = included["r"].notna().sum()
 
-nominally_significant_count = len(
+nominally_significant = included[
+    included["p"] < 0.05
+].copy()
+
+significant_count = len(
     nominally_significant
-)
-
-mean_r = (
-    valid_correlations["r"].mean()
-    if not valid_correlations.empty
-    else float("nan")
-)
-
-mean_absolute_r = (
-    valid_correlations["r"].abs().mean()
-    if not valid_correlations.empty
-    else float("nan")
 )
 
 behavior_count = (
@@ -222,225 +109,368 @@ wellbeing_count = (
     .nunique()
 )
 
+mean_r = included["r"].mean()
 
-# ============================================================
-# 11. SUMMARY TABLE BY WELLBEING
-# ============================================================
-
-wellbeing_table = (
-    nominally_significant
-    .groupby("Wellbeing_Variable")
-    .size()
-    .reset_index(
-        name="Nominally_Significant_Associations"
-    )
-)
-
-
-# ------------------------------------------------------------
-# Keep the original wellbeing variable order when possible.
-# ------------------------------------------------------------
-
-wellbeing_order = [
-    "fatigue",
-    "mood",
-    "readiness",
-    "sleep_quality",
-    "stress",
-]
-
-wellbeing_table["Order"] = (
-    wellbeing_table["Wellbeing_Variable"]
-    .map(
-        {
-            name: index
-            for index, name in enumerate(
-                wellbeing_order
-            )
-        }
-    )
-)
-
-wellbeing_table = (
-    wellbeing_table
-    .sort_values(
-        ["Order", "Wellbeing_Variable"],
-        na_position="last"
-    )
-    .drop(columns=["Order"])
-    .reset_index(drop=True)
-)
+mean_abs_r = included["r"].abs().mean()
 
 
 # ============================================================
-# 12. SAVE SUMMARY TABLE
+# SUMMARY TABLE BY WELLBEING
 # ============================================================
 
-TABLE_FILE = os.path.join(
-    OUTPUT_DIR,
-    "final_summary_table.csv"
+summary_rows = []
+
+for wellbeing, group in included.groupby(
+    "Wellbeing_Variable"
+):
+
+    significant = group[
+        group["p"] < 0.05
+    ]
+
+    summary_rows.append({
+        "Wellbeing_Variable": wellbeing,
+        "Relationships_Tested": len(group),
+        "Valid_Correlations": group["r"].notna().sum(),
+        "Nominally_Significant": len(significant),
+        "Mean_r": group["r"].mean(),
+        "Mean_Absolute_r": group["r"].abs().mean()
+    })
+
+
+summary_table = pd.DataFrame(
+    summary_rows
 )
 
-wellbeing_table.to_csv(
-    TABLE_FILE,
+summary_table.to_csv(
+    os.path.join(
+        OUTPUT_DIR,
+        "final_summary_table.csv"
+    ),
     index=False
 )
 
 
 # ============================================================
-# 13. SAVE NOMINALLY SIGNIFICANT RESULTS
+# NOMINALLY SIGNIFICANT RELATIONSHIPS
 # ============================================================
-
-SIGNIFICANT_FILE = os.path.join(
-    OUTPUT_DIR,
-    "nominally_significant_relationships.csv"
-)
 
 nominally_significant.to_csv(
-    SIGNIFICANT_FILE,
+    os.path.join(
+        OUTPUT_DIR,
+        "nominally_significant_relationships.csv"
+    ),
     index=False
 )
 
 
 # ============================================================
-# 14. CREATE BAR CHART
+# SEVEN-DAY BEHAVIOR × WELLBEING TABLE
+# ============================================================
+#
+# This table shows how many participants have a nominally
+# significant relationship for each:
+#
+# Previous 7 days of behavioral data
+#              ->
+# Same-day wellbeing
+#
+# Example:
+# Steps -> Mood
+# Sleep Hours -> Stress
+#
+
+behavior_wellbeing_table = pd.crosstab(
+    nominally_significant["Behavioral_Variable"],
+    nominally_significant["Wellbeing_Variable"]
+)
+
+
+# ============================================================
+# ORDER VARIABLES FOR PRESENTATION
 # ============================================================
 
-if wellbeing_table.empty:
+behavior_order = [
+    "Steps",
+    "Exercise_Count",
+    "Exercise_Duration",
+    "Exercise_Distance",
+    "Exercise_Calories",
+    "Exercise_Avg_HR",
+    "Sleep_Hours",
+    "Sleep_Duration_Score",
+    "Deep_Sleep_Minutes",
+    "Sleep_Restlessness",
+    "Sleep_Composition",
+    "Sleep_Revitalization",
+    "Sleep_Score"
+]
 
-    print(
-        "\nNo nominally significant relationships "
-        "were found. Chart will not be created."
+wellbeing_order = [
+    "Fatigue",
+    "Mood",
+    "Readiness",
+    "Sleep quality",
+    "Stress"
+]
+
+
+behavior_order_existing = [
+    x for x in behavior_order
+    if x in behavior_wellbeing_table.index
+]
+
+wellbeing_order_existing = [
+    x for x in wellbeing_order
+    if x in behavior_wellbeing_table.columns
+]
+
+
+behavior_wellbeing_table = (
+    behavior_wellbeing_table
+    .reindex(
+        index=behavior_order_existing,
+        columns=wellbeing_order_existing,
+        fill_value=0
     )
+)
 
-else:
 
-    plt.figure(
-        figsize=(9, 5)
+# Add total number of nominally significant relationships
+behavior_wellbeing_table["Total"] = (
+    behavior_wellbeing_table.sum(axis=1)
+)
+
+
+behavior_wellbeing_table.to_csv(
+    os.path.join(
+        OUTPUT_DIR,
+        "seven_day_behavior_wellbeing_table.csv"
     )
+)
 
-    plt.bar(
-        wellbeing_table["Wellbeing_Variable"],
-        wellbeing_table[
-            "Nominally_Significant_Associations"
-        ]
-    )
 
-    plt.xlabel(
-        "Wellbeing measure"
-    )
+# ============================================================
+# HEATMAP
+# ============================================================
 
-    plt.ylabel(
-        "Number of nominally significant associations"
-    )
+plt.figure(
+    figsize=(11, 8)
+)
 
-    plt.title(
-        "Seven-day behavioral history and wellbeing"
-    )
+heatmap_data = (
+    behavior_wellbeing_table
+    .drop(columns=["Total"])
+)
 
-    plt.xticks(
-        rotation=30,
-        ha="right"
-    )
+plt.imshow(
+    heatmap_data.values,
+    aspect="auto"
+)
 
-    plt.tight_layout()
+plt.xticks(
+    range(len(heatmap_data.columns)),
+    heatmap_data.columns,
+    rotation=45,
+    ha="right"
+)
 
-    CHART_FILE = os.path.join(
+plt.yticks(
+    range(len(heatmap_data.index)),
+    heatmap_data.index
+)
+
+plt.xlabel(
+    "Wellbeing variable"
+)
+
+plt.ylabel(
+    "Behavioral variable"
+)
+
+plt.title(
+    "Seven-Day Behavioral History × Same-Day Wellbeing"
+)
+
+# Add values inside cells
+for i in range(
+    heatmap_data.shape[0]
+):
+    for j in range(
+        heatmap_data.shape[1]
+    ):
+        value = heatmap_data.iloc[i, j]
+
+        plt.text(
+            j,
+            i,
+            str(int(value)),
+            ha="center",
+            va="center"
+        )
+
+
+plt.colorbar(
+    label="Number of nominally significant relationships"
+)
+
+plt.tight_layout()
+
+plt.savefig(
+    os.path.join(
+        OUTPUT_DIR,
+        "seven_day_behavior_wellbeing_heatmap.png"
+    ),
+    dpi=300
+)
+
+plt.close()
+
+
+# ============================================================
+# OVERALL SUMMARY CHART
+# ============================================================
+
+plt.figure(
+    figsize=(8, 5)
+)
+
+plt.bar(
+    summary_table["Wellbeing_Variable"],
+    summary_table["Nominally_Significant"]
+)
+
+plt.xlabel(
+    "Wellbeing variable"
+)
+
+plt.ylabel(
+    "Number of nominally significant relationships"
+)
+
+plt.title(
+    "Nominally Significant Associations by Wellbeing"
+)
+
+plt.xticks(
+    rotation=30,
+    ha="right"
+)
+
+plt.tight_layout()
+
+plt.savefig(
+    os.path.join(
         OUTPUT_DIR,
         "final_summary_chart.png"
-    )
+    ),
+    dpi=300
+)
 
-    plt.savefig(
-        CHART_FILE,
-        dpi=300,
-        bbox_inches="tight"
-    )
-
-    plt.close()
+plt.close()
 
 
 # ============================================================
-# 15. CREATE TEXT SUMMARY
+# TEXT REPORT
 # ============================================================
 
-REPORT_FILE = os.path.join(
+report_path = os.path.join(
     OUTPUT_DIR,
     "final_summary.txt"
 )
 
 with open(
-    REPORT_FILE,
+    report_path,
     "w",
     encoding="utf-8"
-) as file:
+) as f:
 
-    file.write(
-        "FINAL SEVEN-DAY ANALYSIS SUMMARY\n"
+    f.write(
+        "FINAL RESULTS SUMMARY\n"
     )
 
-    file.write(
-        "=================================\n\n"
+    f.write(
+        "=====================\n\n"
     )
 
-    file.write(
+    f.write(
         "Analysis framework:\n"
     )
 
-    file.write(
-        "Previous 7 days of behavioral data "
-        "-> same-day wellbeing\n\n"
+    f.write(
+        "Previous 7 days of behavioral data -> "
+        "same-day wellbeing\n\n"
     )
 
-    file.write(
-        f"Participants: {participant_count}\n"
+    f.write(
+        f"Participants: {included['Participant'].nunique()}\n"
     )
 
-    file.write(
+    f.write(
         f"Total relationships tested: "
         f"{total_relationships}\n"
     )
 
-    file.write(
+    f.write(
         f"Relationships included (N >= 10): "
         f"{included_relationships}\n"
     )
 
-    file.write(
+    f.write(
         f"Valid correlations: "
-        f"{valid_correlation_count}\n"
+        f"{valid_correlations}\n"
     )
 
-    file.write(
+    f.write(
         f"Behavioral variables: "
         f"{behavior_count}\n"
     )
 
-    file.write(
+    f.write(
         f"Wellbeing variables: "
         f"{wellbeing_count}\n"
     )
 
-    file.write(
+    f.write(
         f"Mean r: "
         f"{mean_r:.4f}\n"
     )
 
-    file.write(
+    f.write(
         f"Mean absolute r: "
-        f"{mean_absolute_r:.4f}\n"
+        f"{mean_abs_r:.4f}\n"
     )
 
-    file.write(
-        "Nominally significant associations "
-        "(p < 0.05): "
-        f"{nominally_significant_count}\n\n"
+    f.write(
+        f"Nominally significant associations "
+        f"(p < 0.05): {significant_count}\n\n"
     )
 
-    file.write(
-        "Important note:\n"
+    f.write(
+        "Seven-day behavior × wellbeing table:\n"
     )
 
-    file.write(
+    f.write(
+        "The table counts nominally significant "
+        "participant-level associations between "
+        "each behavioral variable measured during "
+        "the previous seven days and each same-day "
+        "wellbeing variable.\n\n"
+    )
+
+    f.write(
+        behavior_wellbeing_table.to_string()
+    )
+
+    f.write(
+        "\n\n"
+    )
+
+    f.write(
+        "Interpretation note:\n"
+    )
+
+    f.write(
         "Associations with p < 0.05 are treated as "
         "nominally significant exploratory associations. "
         "They do not establish causality.\n"
@@ -448,17 +478,16 @@ with open(
 
 
 # ============================================================
-# 16. CONSOLE SUMMARY
+# FINAL MESSAGE
 # ============================================================
 
-print()
 print("=" * 80)
 print("FINAL RESULTS COMPLETED")
 print("=" * 80)
 
 print(
     f"Participants: "
-    f"{participant_count}"
+    f"{included['Participant'].nunique()}"
 )
 
 print(
@@ -473,33 +502,37 @@ print(
 
 print(
     f"Valid correlations: "
-    f"{valid_correlation_count}"
+    f"{valid_correlations}"
 )
 
 print(
     f"Nominally significant associations: "
-    f"{nominally_significant_count}"
+    f"{significant_count}"
 )
 
 print()
-print("Generated files:")
+print("Generated:")
 
 print(
-    f"  - {TABLE_FILE}"
+    "  results/final/final_summary_table.csv"
 )
 
 print(
-    f"  - {SIGNIFICANT_FILE}"
+    "  results/final/nominally_significant_relationships.csv"
 )
 
 print(
-    f"  - {REPORT_FILE}"
+    "  results/final/seven_day_behavior_wellbeing_table.csv"
 )
 
-if not wellbeing_table.empty:
+print(
+    "  results/final/seven_day_behavior_wellbeing_heatmap.png"
+)
 
-    print(
-        f"  - {CHART_FILE}"
-    )
+print(
+    "  results/final/final_summary.txt"
+)
 
-print("=" * 80)
+print(
+    "  results/final/final_summary_chart.png"
+)
