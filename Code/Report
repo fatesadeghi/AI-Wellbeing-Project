@@ -27,7 +27,10 @@ OUTPUT_DIR = os.path.join(
     "final"
 )
 
-os.makedirs(OUTPUT_DIR, exist_ok=True)
+os.makedirs(
+    OUTPUT_DIR,
+    exist_ok=True
+)
 
 
 # ============================================================
@@ -47,7 +50,8 @@ required_columns = [
 ]
 
 missing_columns = [
-    col for col in required_columns
+    col
+    for col in required_columns
     if col not in df.columns
 ]
 
@@ -62,7 +66,10 @@ if missing_columns:
 # ============================================================
 
 included = df[
-    df["Included"].astype(str).str.lower().eq("yes")
+    df["Included"]
+    .astype(str)
+    .str.lower()
+    .eq("yes")
 ].copy()
 
 included["r"] = pd.to_numeric(
@@ -89,7 +96,9 @@ total_relationships = len(df)
 
 included_relationships = len(included)
 
-valid_correlations = included["r"].notna().sum()
+valid_correlations = (
+    included["r"].notna().sum()
+)
 
 nominally_significant = included[
     included["p"] < 0.05
@@ -142,6 +151,7 @@ summary_table = pd.DataFrame(
     summary_rows
 )
 
+
 summary_table.to_csv(
     os.path.join(
         OUTPUT_DIR,
@@ -168,26 +178,26 @@ nominally_significant.to_csv(
 # SEVEN-DAY BEHAVIOR × WELLBEING TABLE
 # ============================================================
 #
-# This table shows how many participants have a nominally
-# significant relationship for each:
-#
 # Previous 7 days of behavioral data
-#              ->
+#                ->
 # Same-day wellbeing
 #
-# Example:
-# Steps -> Mood
-# Sleep Hours -> Stress
-#
+# Each cell represents the number of nominally
+# significant participant-level relationships.
+# ============================================================
 
 behavior_wellbeing_table = pd.crosstab(
-    nominally_significant["Behavioral_Variable"],
-    nominally_significant["Wellbeing_Variable"]
+    nominally_significant[
+        "Behavioral_Variable"
+    ],
+    nominally_significant[
+        "Wellbeing_Variable"
+    ]
 )
 
 
 # ============================================================
-# ORDER VARIABLES FOR PRESENTATION
+# ORDER VARIABLES
 # ============================================================
 
 behavior_order = [
@@ -206,22 +216,29 @@ behavior_order = [
     "Sleep_Score"
 ]
 
+
+# IMPORTANT:
+# These are the exact wellbeing names used
+# in the seven-day analysis output.
+
 wellbeing_order = [
-    "Fatigue",
-    "Mood",
-    "Readiness",
-    "Sleep quality",
-    "Stress"
+    "fatigue",
+    "mood",
+    "readiness",
+    "sleep_quality",
+    "stress"
 ]
 
 
 behavior_order_existing = [
-    x for x in behavior_order
+    x
+    for x in behavior_order
     if x in behavior_wellbeing_table.index
 ]
 
 wellbeing_order_existing = [
-    x for x in wellbeing_order
+    x
+    for x in wellbeing_order
     if x in behavior_wellbeing_table.columns
 ]
 
@@ -236,11 +253,18 @@ behavior_wellbeing_table = (
 )
 
 
-# Add total number of nominally significant relationships
+# ============================================================
+# ADD TOTAL
+# ============================================================
+
 behavior_wellbeing_table["Total"] = (
     behavior_wellbeing_table.sum(axis=1)
 )
 
+
+# ============================================================
+# SAVE SEVEN-DAY RELATIONSHIP TABLE
+# ============================================================
 
 behavior_wellbeing_table.to_csv(
     os.path.join(
@@ -251,16 +275,17 @@ behavior_wellbeing_table.to_csv(
 
 
 # ============================================================
-# HEATMAP
+# SEVEN-DAY BEHAVIOR × WELLBEING HEATMAP
 # ============================================================
-
-plt.figure(
-    figsize=(11, 8)
-)
 
 heatmap_data = (
     behavior_wellbeing_table
     .drop(columns=["Total"])
+)
+
+
+plt.figure(
+    figsize=(11, 8)
 )
 
 plt.imshow(
@@ -292,13 +317,17 @@ plt.title(
     "Seven-Day Behavioral History × Same-Day Wellbeing"
 )
 
+
 # Add values inside cells
+
 for i in range(
     heatmap_data.shape[0]
 ):
+
     for j in range(
         heatmap_data.shape[1]
     ):
+
         value = heatmap_data.iloc[i, j]
 
         plt.text(
@@ -311,7 +340,10 @@ for i in range(
 
 
 plt.colorbar(
-    label="Number of nominally significant relationships"
+    label=(
+        "Number of nominally "
+        "significant relationships"
+    )
 )
 
 plt.tight_layout()
@@ -379,6 +411,7 @@ report_path = os.path.join(
     "final_summary.txt"
 )
 
+
 with open(
     report_path,
     "w",
@@ -403,7 +436,8 @@ with open(
     )
 
     f.write(
-        f"Participants: {included['Participant'].nunique()}\n"
+        f"Participants: "
+        f"{included['Participant'].nunique()}\n"
     )
 
     f.write(
@@ -443,7 +477,8 @@ with open(
 
     f.write(
         f"Nominally significant associations "
-        f"(p < 0.05): {significant_count}\n\n"
+        f"(p < 0.05): "
+        f"{significant_count}\n\n"
     )
 
     f.write(
@@ -451,7 +486,7 @@ with open(
     )
 
     f.write(
-        "The table counts nominally significant "
+        "This table counts nominally significant "
         "participant-level associations between "
         "each behavioral variable measured during "
         "the previous seven days and each same-day "
@@ -478,7 +513,7 @@ with open(
 
 
 # ============================================================
-# FINAL MESSAGE
+# FINAL OUTPUT
 # ============================================================
 
 print("=" * 80)
