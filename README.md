@@ -1,3 +1,6 @@
+بله. این هم نسخه کامل با Markdown واقعی، آماده کپی مستقیم در `README.md`:
+
+````markdown
 # AI-Based Early Detection of Changes in Well-Being and Quality of Life Among People Living Alone
 
 **Personalized behavioral analysis and machine learning using the PMData dataset**
@@ -6,17 +9,24 @@
 
 ## Overview
 
-This project investigates whether changes in an individual's daily behavioral patterns can be associated with changes in well-being, and whether personalized machine-learning models can use behavioral information to model subsequent changes in well-being.
+This project investigates whether changes in an individual's daily behavioral patterns can be associated with changes in well-being, and whether recent behavioral patterns can support personalized prediction of individual well-being.
 
-The project is based on a **personalized monitoring framework**:
+The project is based on a personalized framework:
 
-> **Learn an individual's normal behavior → detect unusual deviations → examine their relationship with well-being → evaluate whether these patterns can support personalized early detection.**
+> **Learn an individual's normal behavior → examine deviations from that personal pattern → investigate their relationship with well-being → evaluate personalized prediction.**
 
-Instead of applying the same behavioral threshold to everyone, the project first establishes a behavioral baseline for each participant. Daily observations are then compared with that individual's own baseline to identify unusual behavioral deviations.
+Instead of assuming that the same behavioral pattern is normal for everyone, the project uses each participant's own historical behavioral information as a reference point.
 
-These deviations are subsequently examined using statistical analyses and personalized machine-learning models.
+The project combines two complementary analytical approaches:
 
-**Important:** The system is a research and early-warning framework. Behavioral deviations are treated as potential signals and **not as diagnoses or proof of a health condition**.
+1. **Participant-level statistical analysis**
+2. **Personalized machine learning**
+
+The statistical analysis investigates associations between behavioral measures and well-being.
+
+The machine-learning analysis investigates whether recent behavioral patterns can be used to predict an individual's Wellbeing Index.
+
+**Important:** The system is a research framework. Behavioral deviations are treated as potential signals and not as diagnoses or proof of a health condition.
 
 ---
 
@@ -24,15 +34,7 @@ These deviations are subsequently examined using statistical analyses and person
 
 > **Can AI detect changes in a person's well-being by learning their daily habits and spotting unusual behavior?**
 
-The project addresses this question through two complementary analytical approaches:
-
-1. **Statistical analysis**
-   Examines associations between personalized behavioral deviations and well-being-related measures.
-
-2. **Personalized machine learning**
-   Evaluates whether participant-specific behavioral information can be used to model next-day changes in well-being.
-
-The statistical and machine-learning analyses answer related but different questions and are therefore interpreted separately.
+The project addresses this question through personalized behavioral analysis, temporal analysis, and individual-level machine learning.
 
 ---
 
@@ -42,17 +44,17 @@ The project uses the **PMData dataset**, which contains longitudinal behavioral,
 
 The final analysis includes:
 
-* **16 participants**
-* **13 behavioral variables**
-* **5 well-being indicators**
+- **16 participants**
+- **13 behavioral variables**
+- **5 well-being indicators**
 
-The project retains the complete set of behavioral variables as candidate predictors rather than selecting a smaller subset before analysis.
+The complete behavioral variable set was retained rather than selecting a smaller subset before analysis.
 
 ---
 
 ## Behavioral Variables
 
-The 13 behavioral variables used throughout the analysis are:
+The 13 behavioral variables used in the analysis are:
 
 1. `Steps`
 2. `Exercise_Count`
@@ -68,21 +70,21 @@ The 13 behavioral variables used throughout the analysis are:
 12. `Sleep_Revitalization`
 13. `Sleep_Score`
 
-These variables represent daily activity and sleep-related behavior.
+These variables represent daily physical activity and sleep-related behavior.
 
 ---
 
 ## Well-Being Indicators
 
-Five self-reported well-being-related indicators are modeled:
+Five self-reported well-being-related indicators are used:
 
-* `fatigue`
-* `mood`
-* `readiness`
-* `sleep_quality`
-* `stress`
+- `fatigue`
+- `mood`
+- `readiness`
+- `sleep_quality`
+- `stress`
 
-These variables represent specific reported aspects of well-being rather than the complete multidimensional construct of well-being.
+These indicators represent specific reported aspects of daily well-being rather than the complete multidimensional construct of well-being.
 
 ---
 
@@ -90,111 +92,76 @@ These variables represent specific reported aspects of well-being rather than th
 
 ## 1. Participant-Level Data Preparation
 
-The raw PMData information is transformed into participant-level daily datasets.
+The PMData information is transformed into participant-level daily datasets.
 
-The analysis preserves the longitudinal structure of the data so that earlier observations can be used to establish a personal baseline and later observations can be evaluated against it.
+The longitudinal structure of the data is preserved so that earlier observations can be used to establish participant-specific behavioral reference points and later observations can be examined in relation to them.
 
 ---
 
 ## 2. Personalized Baseline
 
-A separate behavioral baseline is constructed for every participant.
+A separate behavioral baseline is constructed for each participant.
 
-For each participant, the available observations are ordered chronologically and divided into two periods:
+For each participant, observations are ordered chronologically. The first 50% of chronological observations are used to establish the participant's personal baseline.
 
 ```text
 Earlier 50% of observations
-        ↓
-Personal baseline
-        ↓
+            ↓
+    Personal baseline
+            ↓
 Later 50% of observations
-        ↓
-Analysis period
-```
+            ↓
+      Analysis period
+````
 
-The baseline is calculated separately for every behavioral variable using:
+The baseline is calculated separately for each behavioral variable using:
 
 * mean
 * standard deviation
 
-This chronological split prevents future observations from being used to define the earlier behavioral baseline.
+This chronological structure prevents later observations from being used to define the earlier personal reference pattern.
 
 ---
 
 ## 3. Personalized Behavioral Deviation
 
-For each participant and behavioral variable, daily observations in the analysis period are standardized relative to that participant's own baseline.
+For each participant and behavioral variable, observations in the analysis period are standardized relative to that participant's own baseline.
 
 The deviation score is:
 
-$$
-Z = \frac{X-\mu_{baseline}}{\sigma_{baseline}}
-$$
+```text
+Z = (X − μ) / σ
+```
 
 where:
 
-* \(X\) = observed daily value
-* \(\mu_{baseline}\) = participant-specific baseline mean
-* \(\sigma_{baseline}\) = participant-specific baseline standard deviation
+* `X` = observed behavioral value
+* `μ` = participant-specific baseline mean
+* `σ` = participant-specific baseline standard deviation
 
 Interpretation:
 
-* positive \(Z\) → value is above the participant's usual level
-* negative \(Z\) → value is below the participant's usual level
-* larger \(|Z|\) → greater deviation from the participant's usual variability
+* positive `Z` → value is above the participant's usual level
+* negative `Z` → value is below the participant's usual level
+* larger `|Z|` → greater deviation from the participant's baseline variability
 
-The deviation score identifies **unusual behavior**, not whether the behavior is inherently positive or negative.
-
----
-
-## 4. Primary Deviation Threshold
-
-The primary analysis uses:
-
-$$
-|Z| \geq 2
-$$
-
-as the definition of a substantial behavioral deviation.
-
-Therefore:
-
-```text
-|Z| < 2    → not classified as a primary deviation
-|Z| ≥ 2    → classified as a primary deviation
-```
-
-Both unusually high and unusually low behavioral values are retained.
-
----
-
-## 5. Sensitivity Analysis
-
-To examine whether the results depend strongly on the deviation threshold, a second analysis uses:
-
-$$
-|Z| \geq 1
-$$
-
-The `|Z| ≥ 2` analysis remains the primary analysis, while `|Z| ≥ 1` is treated as a sensitivity analysis.
-
-This provides a more sensitive test that captures smaller deviations.
+The deviation score describes how unusual an observation is relative to the participant's own historical pattern. It does not determine whether the behavior is inherently positive or negative.
 
 ---
 
 # Statistical Analysis
 
-The statistical component examines participant-level relationships between behavioral measures and well-being-related variables.
+The statistical analysis examines participant-level relationships between behavioral measures and well-being-related measures.
 
 A minimum of:
 
-$$
-N \geq 10
-$$
+```text
+N ≥ 10
+```
 
 usable paired observations is required for a participant × behavioral-variable × well-being relationship to be included.
 
-Relationships with fewer than 10 usable observations are excluded from statistical interpretation.
+Relationships with fewer than 10 usable observations are excluded from the main correlation analysis.
 
 ---
 
@@ -202,138 +169,84 @@ Relationships with fewer than 10 usable observations are excluded from statistic
 
 Pearson correlation is used to evaluate linear associations.
 
-$$
--1 \leq r \leq 1
-$$
+```text
+−1 ≤ r ≤ 1
+```
 
 where:
 
-* positive \(r\) indicates a positive linear association
-* negative \(r\) indicates a negative linear association
+* positive `r` indicates a positive linear association
+* negative `r` indicates a negative linear association
 * values closer to zero indicate weaker linear association
 
-Correlation measures association and **does not establish causality**.
+Correlation measures association and does not establish causality.
 
 ---
 
-# Temporal Analyses
+# Seven-Day Historical Analysis
 
-The project evaluates behavioral information at multiple temporal scales.
+The final statistical analysis examines whether behavioral information from the previous seven days is associated with well-being on the current day.
 
-## 1. Same-Day Analysis
-
-The first analysis examines whether behavioral information and well-being are associated on the same day.
+For a target day `t`, the behavioral history is calculated from:
 
 ```text
-Behavior at day t
-        ↓
-Well-being at day t
+t−7, t−6, t−5, t−4, t−3, t−2, t−1
 ```
 
-Final results:
+The current day's behavioral observation is not included in the seven-day historical measure.
 
-| Metric                       | Result |
-| ---------------------------- | -----: |
-| Total tested relationships   |  1,040 |
-| Valid relationships (N ≥ 10) |    900 |
-| Raw significant              |    180 |
-| FDR-significant              |     43 |
-
----
-
-## 2. One-Day Lagged Analysis
-
-The second analysis examines whether behavioral information is associated with well-being on the following day.
+The temporal relationship is therefore:
 
 ```text
-Behavior at day t
-        ↓
-Well-being at day t+1
+Previous seven days of behavioral data
+                  ↓
+          Same-day well-being
 ```
 
-Final results:
-
-| Metric                       | Result |
-| ---------------------------- | -----: |
-| Total tested relationships   |  1,040 |
-| Valid relationships (N ≥ 10) |    860 |
-| Raw significant              |     63 |
-| FDR-significant              |      4 |
-
-This analysis introduces temporal ordering, but temporal ordering alone does **not establish causality**.
+The seven-day window is an exploratory temporal framework. It is not assumed to represent an optimal biological or clinical period.
 
 ---
 
-## 3. Seven-Day Historical Analysis
+## Final Statistical Results
 
-The third temporal analysis examines whether behavioral history during the previous seven days is associated with well-being on the current day.
+The final seven-day analysis considered:
+
+* 16 participants
+* 13 behavioral variables
+* 5 well-being variables
+
+This produced:
 
 ```text
-Behavior during previous 7 days
-        ↓
-Current-day well-being
+16 × 13 × 5 = 1,040
 ```
 
-Final results:
+potential participant-level relationships.
 
-| Metric                       | Result |
-| ---------------------------- | -----: |
-| Total tested relationships   |  1,040 |
-| Valid relationships (N ≥ 10) |    794 |
-| Raw significant              |    103 |
-| FDR-significant              |      6 |
+After applying the minimum observation requirement:
 
----
+* **845** relationships had `N ≥ 10`
+* **794** produced valid correlation results
+* **103** were nominally significant at `p < 0.05`
 
-# Multiple-Testing Correction
-
-Because the project evaluates many participant × behavior × well-being relationships, multiple-testing correction is required.
-
-The project uses the **Benjamini–Hochberg False Discovery Rate (FDR)** procedure.
-
-The final significance criterion is:
-
-$$
-q < 0.05
-$$
-
-The distinction between raw and corrected significance is maintained throughout the results.
+Across valid relationships:
 
 ```text
-Raw significance:
-p < 0.05
-
-FDR significance:
-q < 0.05
+Mean r   = −0.0164
+Mean |r| = 0.1688
 ```
 
-The FDR-corrected results are used for the final statistical interpretation.
+The 103 significant results represent participant-level associations rather than 103 unique participants.
 
----
-
-# Final Statistical Summary
-
-The completed statistical analyses produced the following results:
-
-| Analysis             | Total Tests | Valid N ≥ 10 | Raw Significant | FDR Significant |
-| -------------------- | ----------: | -----------: | --------------: | --------------: |
-| Same-day             |       1,040 |          900 |             180 |              43 |
-| One-day lagged       |       1,040 |          860 |              63 |               4 |
-| Seven-day history    |       1,040 |          794 |             103 |               6 |
-| Sensitivity, |Z| ≥ 1 |       1,040 |          887 |             182 |              47 |
-| **Total**            |   **4,160** |    **3,443** |         **528** |         **100** |
-
-The statistical analyses therefore identified FDR-significant associations across the completed analysis families.
-
-These results represent **associations**, not causal effects.
+The results are interpreted as associations and not as evidence of causation.
 
 ---
 
 # Machine Learning
 
-The project includes a personalized machine-learning component to investigate whether daily behavioral information can be used to model **next-day changes in well-being**.
+The project includes a personalized machine-learning component to investigate whether recent behavioral patterns can support prediction of an individual's well-being.
 
-The ML pipeline was designed around the same personalized framework used in the statistical analysis.
+The machine-learning stage uses behavioral information from the previous seven calendar days and predicts the participant's Wellbeing Index.
 
 ---
 
@@ -342,169 +255,109 @@ The ML pipeline was designed around the same personalized framework used in the 
 ```text
 Participant-level daily data
             ↓
+Wellbeing Index construction
+            ↓
 Feature availability analysis
             ↓
-Behavioral feature preparation
+Seven-day behavioral feature construction
             ↓
-Derived behavioral features
+Participant-specific model training
             ↓
-Next-day well-being target
+Wellbeing Index prediction
             ↓
-Participant-specific model
-            ↓
-Model evaluation
-            ↓
-Feature importance
-            ↓
-Behavior-level interpretation
+Prediction evaluation
 ```
 
 ---
 
-## ML Feature Space
+## Wellbeing Index
 
-The original behavioral feature space contains the same 13 behavioral variables used in the statistical analysis.
+The Wellbeing Index is constructed from the five daily self-reported well-being measures:
 
-The ML preprocessing pipeline generates:
+* `fatigue`
+* `mood`
+* `readiness`
+* `sleep_quality`
+* `stress`
 
-**91 candidate derived feature columns**
-
-These derived features are mapped back to the original behavioral variables to allow interpretation at the behavioral level.
-
-All 91 derived features were successfully mapped to their corresponding original behavioral variables.
-
----
-
-# Missing Data and Feature Availability
-
-Because longitudinal wearable data contain incomplete observations, feature availability is evaluated separately for each participant.
-
-The ML pipeline explicitly tracks categories including:
-
-* `Available`
-* `Available_With_Missing`
-* `Available_With_Long_Missing_Streak`
-* `Available_Sleep_Exempt`
-* `Missing_Column`
-* `Excluded_First_10_Days_Missing`
-
-The feature-availability analysis identified:
-
-| Availability Category              | Count |
-| ---------------------------------- | ----: |
-| Available_With_Missing             |   115 |
-| Available                          |    69 |
-| Available_Sleep_Exempt             |    14 |
-| Available_With_Long_Missing_Streak |     9 |
-| Missing_Column                     |     1 |
-| Excluded_First_10_Days_Missing     |     0 |
-
-Missingness is therefore documented explicitly rather than silently ignored.
+The index provides a single target for the personalized machine-learning stage while combining multiple dimensions of daily reported well-being.
 
 ---
 
-# Personalized ML Models
+## ML Feature Construction
 
-Instead of training one universal model for the entire population, the project trains separate models for each participant and each well-being target.
+The machine-learning pipeline uses the same 13 behavioral variables as the statistical analysis.
 
-The five targets are:
+For each behavioral variable, two temporal features are calculated from the previous seven calendar days:
 
-1. `fatigue`
-2. `mood`
-3. `readiness`
-4. `sleep_quality`
-5. `stress`
+1. seven-day slope
+2. seven-day change
 
-With:
+Therefore:
 
-* 16 participants
-* 5 well-being targets
+```text
+13 behavioral variables × 2 temporal features
+= 26 behavioral features
+```
 
-the complete ML pipeline produces:
+The seven-day slope represents the direction of change across the available observations in the seven-day window.
 
-$$
-16 \times 5 = 80
-$$
+The seven-day change represents the difference between the first and last available observations in that window.
 
-**participant-specific models**.
+The behavioral information from the target day is not used as a prediction feature.
 
 ---
 
-# ML Evaluation
+## Personalized ML Models
 
-The personalized models are evaluated using:
+A separate Random Forest regression model is trained for each participant.
 
-* \(R^2\)
-* MAE
-* RMSE
+The models use earlier observations from the same participant for training.
 
-These metrics provide complementary information about predictive performance.
+A minimum of 10 available training observations is required before generating a prediction.
 
-## Results Across 80 Models
+Missing feature values are handled using median imputation within the machine-learning pipeline.
 
-| Metric           |  Result |
-| ---------------- | ------: |
-| Models           |      80 |
-| Positive \(R^2\) |      14 |
-| Zero \(R^2\)     |       1 |
-| Negative \(R^2\) |      65 |
-| Mean \(R^2\)     | -0.1147 |
-| Median \(R^2\)   | -0.0903 |
-| Mean MAE         |  0.6871 |
-| Mean RMSE        |  0.9236 |
-
-The results show substantial variation between participant-specific models.
-
-Most models produced non-positive \(R^2\) values. Therefore, the current dataset and modeling configuration do not provide evidence of strong general predictive performance across participants.
-
-The ML component should consequently be interpreted as an **implemented and evaluated research model**, rather than a validated real-world prediction system.
+The prediction target is the participant's Wellbeing Index.
 
 ---
 
-# Feature Importance
+# ML Prediction Evaluation
 
-Prediction performance alone does not indicate which behavioral patterns were used by the models.
+The resulting predictions are compared with the observed Wellbeing Index values for the same participant and target date.
 
-The ML pipeline therefore also performs feature-importance analysis.
+The evaluation uses:
 
-The pipeline produced:
+* Mean Absolute Error (MAE)
+* Root Mean Squared Error (RMSE)
+* R²
 
-* **7,280 feature-importance rows**
-* **91 derived feature columns**
-* a complete mapping from derived features to the original 13 behavioral variables
+The final prediction pipeline generated:
 
-Feature importance was examined:
+* **1,863 prediction records**
+* **1,454 evaluated predictions with observed Wellbeing Index values**
 
-* overall
-* by participant
-* by well-being target
-* among the top three behaviors for each participant × target combination
+Overall performance:
 
----
+| Metric |  Result |
+| ------ | ------: |
+| MAE    |  0.2763 |
+| RMSE   |  0.3578 |
+| R²     | −0.1451 |
 
-## Top-3 Behavioral Frequency
+At the participant level:
 
-The frequency with which each behavioral variable appeared among the top three model features across participant × target combinations was:
+| Metric |    Mean |
+| ------ | ------: |
+| MAE    |  0.2713 |
+| RMSE   |  0.3527 |
+| R²     | −0.1513 |
 
-| Behavioral Variable  | Top-3 Appearances |
-| -------------------- | ----------------: |
-| Steps                |                49 |
-| Exercise_Calories    |                30 |
-| Sleep_Restlessness   |                28 |
-| Deep_Sleep_Minutes   |                24 |
-| Sleep_Hours          |                24 |
-| Exercise_Duration    |                23 |
-| Sleep_Score          |                20 |
-| Sleep_Duration_Score |                14 |
-| Exercise_Avg_HR      |                13 |
-| Exercise_Distance    |                 6 |
-| Sleep_Revitalization |                 6 |
-| Sleep_Composition    |                 2 |
-| Exercise_Count       |                 1 |
+All 16 participants had negative individual R² values.
 
-These frequencies describe **model feature usage** under the implemented modeling procedure.
+The negative R² values indicate that, under the evaluation procedure used in this study, the predictions did not explain the observed variation in the Wellbeing Index better than the corresponding mean-based reference.
 
-They should not be interpreted as causal importance.
+Therefore, the current machine-learning results should be interpreted as an exploratory evaluation of the personalized prediction framework rather than as evidence of a reliable real-world prediction system.
 
 ---
 
@@ -518,43 +371,71 @@ The two analytical components address different questions.
 
 This component focuses on:
 
-* participant-level associations
-* behavioral deviations
-* temporal relationships
-* correlation
-* statistical significance
-* multiple-testing correction
+* participant-level relationships
+* personalized behavioral patterns
+* seven-day behavioral history
+* Pearson correlation
+* nominal statistical significance
 
 ### Machine learning
 
-> **Can participant-specific behavioral information be used to model changes in well-being?**
+> **Can recent participant-specific behavioral information be used to predict an individual's Wellbeing Index?**
 
 This component focuses on:
 
+* temporal behavioral features
+* personalized models
 * prediction
-* participant-specific models
-* next-day well-being targets
-* model performance
-* feature importance
-
-A behavioral variable can therefore:
-
-* show a statistical association without producing strong predictive performance, or
-* contribute to a model without being statistically significant in the correlation analysis.
+* model evaluation
+* MAE
+* RMSE
+* R²
 
 The two approaches are complementary rather than interchangeable.
+
+A statistical association does not necessarily produce strong predictive performance, and predictive modelling does not by itself establish causality.
+
+---
+
+# Missing Data and Feature Availability
+
+Longitudinal wearable data contain incomplete observations and participant-specific differences in data availability.
+
+The project therefore evaluates feature availability explicitly rather than silently ignoring missing observations.
+
+The machine-learning pipeline tracks:
+
+* `Available`
+* `Available_With_Missing`
+* `Available_With_Long_Missing_Streak`
+* `Available_Sleep_Exempt`
+* `Missing_Column`
+* `Excluded_First_10_Days_Missing`
+
+The feature-availability analysis identified:
+
+| Availability Category                | Count |
+| ------------------------------------ | ----: |
+| `Available_With_Missing`             |   115 |
+| `Available`                          |    69 |
+| `Available_Sleep_Exempt`             |    14 |
+| `Available_With_Long_Missing_Streak` |     9 |
+| `Missing_Column`                     |     1 |
+| `Excluded_First_10_Days_Missing`     |     0 |
+
+Missing observations are not interpreted as evidence that a behavior did not occur.
 
 ---
 
 # Complete Research Pipeline
 
-The complete methodology can be summarized as:
+The final research workflow can be summarized as:
 
 ```text
                          PMData
                            │
                            ▼
-               Participant-level preparation
+              Participant-level preparation
                            │
                            ▼
                   13 behavioral variables
@@ -563,122 +444,110 @@ The complete methodology can be summarized as:
              Personalized chronological baseline
                            │
                            ▼
-               Daily personalized deviations
-                           │
-                ┌──────────┴──────────┐
-                │                     │
-                ▼                     ▼
-          |Z| ≥ 2 primary        |Z| ≥ 1 sensitivity
-                │                     │
-                └──────────┬──────────┘
-                           ▼
-                  Statistical analyses
-                           │
-              ┌────────────┼────────────┐
-              ▼            ▼            ▼
-          Same-day     One-day lag   Seven-day
-              │            │            │
-              └────────────┼────────────┘
-                           ▼
-                   Pearson correlation
+                Daily personalized deviations
                            │
                            ▼
-              Benjamini–Hochberg FDR
+              Previous seven days of behaviour
                            │
                            ▼
-                  Statistical results
+                  Same-day well-being
                            │
                            ▼
-                  Personalized ML
+                  Pearson correlation
                            │
                            ▼
-                 91 derived features
+              Statistical relationship results
                            │
                            ▼
-                 16 participants
-                         ×
-                  5 well-being targets
+                  Wellbeing Index
                            │
                            ▼
-                    80 ML models
+               Seven-day temporal features
                            │
                            ▼
-              R² / MAE / RMSE evaluation
+                 26 behavioral features
                            │
                            ▼
-                  Feature importance
+              Participant-specific model
                            │
                            ▼
-             Personalized behavioral signals
+                 Random Forest regression
+                           │
+                           ▼
+                  Wellbeing prediction
+                           │
+                           ▼
+                  MAE / RMSE / R²
 ```
 
 ---
 
 # Repository Structure
 
-The repository is organized into separate statistical-analysis and machine-learning components.
+The final repository is organized into separate statistical and machine-learning components.
 
 ```text
 AI-Wellbeing-Project/
 │
 ├── Code/
 │   ├── 01_build_baseline.py
-│   ├── 02_same_day_analysis.py
-│   ├── 03_lagged_analysis.py
-│   ├── 04_seven_day_analysis.py
-│   ├── 05_sensitivity_analysis.py
-│   ├── 06_fdr_correction.py
-│   └── 07_final_summary.py
+│   ├── 02_seven_day_analysis.py
+│   └── Report
 │
 ├── ML/
-│   └── Code/
-│       ├── 08_prepare_ml_data.py
-│       ├── 09_feature_availability.py
-│       ├── 10_personalized_ml.py
-│       └── 11_analyze_ml_results.py
+│   ├── 01_build_wellbeing_index.py
+│   ├── 02_build_7day_features.py
+│   ├── 03_train_personal_model.py
+│   ├── 04_predict_and_report.py
+│   ├── 05_test_predictions.py
+│   ├── run_pipeline.py
+│   └── Results/
 │
 ├── data/
 │   └── pmdata/
 │
 ├── results/
 │   ├── baseline/
-│   └── ...
+│   ├── seven_day/
+│   └── final/
 │
 ├── DECISION_LOG.md
 ├── README.md
 └── .gitignore
 ```
 
-The exact generated result files may change as the analysis pipeline is updated, while the methodological structure is documented in `DECISION_LOG.md`.
-
 ---
 
 # Analysis Code
 
-The main statistical pipeline is organized sequentially:
+The final statistical pipeline is organized sequentially:
 
-| Script                       | Purpose                                                                          |   |                            |
-| ---------------------------- | -------------------------------------------------------------------------------- | - | -------------------------- |
-| `01_build_baseline.py`       | Construct participant-specific chronological baselines and behavioral deviations |   |                            |
-| `02_same_day_analysis.py`    | Run same-day behavioral/well-being analysis                                      |   |                            |
-| `03_lagged_analysis.py`      | Run one-day lagged analysis                                                      |   |                            |
-| `04_seven_day_analysis.py`   | Analyze previous seven days of behavioral history                                |   |                            |
-| `05_sensitivity_analysis.py` | Repeat analysis using the `                                                      | Z | ≥ 1` sensitivity threshold |
-| `06_fdr_correction.py`       | Apply Benjamini–Hochberg FDR correction                                          |   |                            |
-| `07_final_summary.py`        | Generate final statistical summaries                                             |   |                            |
+| Script                     | Purpose                                                                                  |
+| -------------------------- | ---------------------------------------------------------------------------------------- |
+| `01_build_baseline.py`     | Construct participant-specific chronological baselines and daily personalized deviations |
+| `02_seven_day_analysis.py` | Analyse previous seven days of behavioral history in relation to same-day well-being     |
+| `Report`                   | Generate final statistical summaries and visual outputs                                  |
 
 ---
 
 # Machine-Learning Code
 
-The ML pipeline is organized as:
+The final ML pipeline is organized as:
 
-| Script                       | Purpose                                                |
-| ---------------------------- | ------------------------------------------------------ |
-| `08_prepare_ml_data.py`      | Prepare participant-level ML data and derived features |
-| `09_feature_availability.py` | Evaluate missingness and feature availability          |
-| `10_personalized_ml.py`      | Train and evaluate participant-specific ML models      |
-| `11_analyze_ml_results.py`   | Analyze model performance and feature importance       |
+| Script                        | Purpose                                          |
+| ----------------------------- | ------------------------------------------------ |
+| `01_build_wellbeing_index.py` | Construct the Wellbeing Index                    |
+| `02_build_7day_features.py`   | Construct seven-day temporal behavioral features |
+| `03_train_personal_model.py`  | Train participant-specific Random Forest models  |
+| `04_predict_and_report.py`    | Generate predictions and prediction reports      |
+| `05_test_predictions.py`      | Evaluate prediction performance                  |
+| `run_pipeline.py`             | Run the ML workflow                              |
+
+Generated ML results are stored in:
+
+```text
+ML/Results/
+```
 
 ---
 
@@ -696,118 +565,114 @@ The repository contains:
 * a research decision log
 * version-controlled project history
 
-The methodological decisions and their rationale are documented in:
+The main methodological decisions and their rationale are documented in:
 
-**`DECISION_LOG.md`**
+`DECISION_LOG.md`
 
-This includes decisions concerning:
-
-* dataset selection
-* behavioral-variable selection
-* personalized baselines
-* chronological splitting
-* deviation thresholds
-* missing-data handling
-* minimum sample size
-* correlation analysis
-* temporal analyses
-* FDR correction
-* ML design
-* model evaluation
-* feature importance
-* ethical interpretation
-* research limitations
+The repository also preserves project development history through Git commits.
 
 ---
 
 # How to Run the Project
 
-The analysis is designed to be executed sequentially.
+## Step 1 — Prepare the Dataset
 
-### Step 1 — Prepare the dataset
-
-Place the PMData data in the expected project data directory.
+Place the PMData data in:
 
 ```text
 data/
 └── pmdata/
 ```
 
-### Step 2 — Run the statistical pipeline
+---
 
-Run the scripts in numerical order:
+## Step 2 — Run the Statistical Pipeline
+
+Run:
 
 ```bash
 python Code/01_build_baseline.py
-python Code/02_same_day_analysis.py
-python Code/03_lagged_analysis.py
-python Code/04_seven_day_analysis.py
-python Code/05_sensitivity_analysis.py
-python Code/06_fdr_correction.py
-python Code/07_final_summary.py
+python Code/02_seven_day_analysis.py
+python Code/Report
 ```
 
-### Step 3 — Run the ML pipeline
+The scripts generate the baseline, seven-day statistical results, summary tables, and visual outputs.
 
-Then execute:
+---
+
+## Step 3 — Run the ML Pipeline
+
+Run:
 
 ```bash
-python ML/Code/08_prepare_ml_data.py
-python ML/Code/09_feature_availability.py
-python ML/Code/10_personalized_ml.py
-python ML/Code/11_analyze_ml_results.py
+python ML/01_build_wellbeing_index.py
+python ML/02_build_7day_features.py
+python ML/03_train_personal_model.py
+python ML/04_predict_and_report.py
+python ML/05_test_predictions.py
 ```
 
-The scripts generate the intermediate and final outputs used for the statistical and ML results.
+The generated results are stored in:
+
+```text
+ML/Results/
+```
 
 ---
 
 # Research Results at a Glance
 
-The current completed analysis provides the following overall picture:
+## Statistical Analysis
 
-### Statistical analysis
+The final statistical analysis includes:
 
-* 16 participants
-* 13 behavioral variables
-* 5 well-being indicators
-* 4,160 tested relationships across four analysis families
-* 3,443 relationships meeting the `N ≥ 10` criterion
-* 528 raw significant relationships
-* 100 FDR-significant relationships
+* **16 participants**
+* **13 behavioral variables**
+* **5 well-being variables**
+* **1,040 potential participant-level relationships**
+* **845 relationships with N ≥ 10**
+* **794 valid correlations**
+* **103 nominally significant associations**
+* **Mean r = −0.0164**
+* **Mean |r| = 0.1688**
 
-### Machine learning
+---
 
-* 91 derived candidate features
-* 16 participants
-* 5 well-being targets
-* 80 personalized models
-* 14 models with positive \(R^2\)
-* 65 models with negative \(R^2\)
-* mean \(R^2 = -0.1147\)
-* mean MAE = 0.6871
-* mean RMSE = 0.9236
-* 7,280 feature-importance records
+## Machine Learning
+
+The final machine-learning analysis includes:
+
+* **13 behavioral variables**
+* **26 temporal behavioral features**
+* **16 participants**
+* **1,863 prediction records**
+* **1,454 evaluated predictions**
+* **MAE = 0.2763**
+* **RMSE = 0.3578**
+* **R² = −0.1451**
+
+All 16 participants had negative individual R² values.
 
 ---
 
 # Interpretation
 
-The statistical results demonstrate that behavioral measures can show measurable associations with self-reported well-being-related variables under the implemented personalized analytical framework.
+The statistical analysis provides evidence of participant-level associations between behavioral patterns and self-reported well-being measures under the implemented seven-day analytical framework.
 
-However, the machine-learning results indicate that these associations do not automatically translate into strong predictive performance.
+However, statistical association does not automatically translate into strong predictive performance.
 
-Most participant-specific models produced non-positive \(R^2\) values. This means that the current implementation should not be presented as a validated predictive or clinical system.
+The machine-learning evaluation produced negative R² values for all participants under the implemented prediction procedure.
 
-Instead, the project demonstrates the feasibility of a **personalized research framework** for investigating behavioral signals of well-being.
+Therefore, the current implementation should be understood as a personalized research framework rather than a validated predictive or clinical system.
 
 The distinction is important:
 
 ```text
 Association ≠ Prediction
+
 Prediction ≠ Causation
+
 Behavioral deviation ≠ Diagnosis
-Feature importance ≠ Causal importance
 ```
 
 ---
@@ -816,61 +681,61 @@ Feature importance ≠ Causal importance
 
 The current project has several important limitations.
 
-## Sample size
+## Sample Size
 
-The analysis includes only:
+The analysis includes 16 participants.
 
-**16 participants**
+This limits the extent to which the findings can be generalized beyond the participants represented in the dataset.
 
-This limits statistical power and generalizability.
+## Unequal Data Availability
 
-## Unequal data availability
+Participants do not necessarily have identical amounts of usable data across all behavioural variables.
 
-Participants do not necessarily have identical amounts of usable data across all variables.
+## Missing Observations
 
-## Missing observations
+Longitudinal wearable datasets can contain missing days, incomplete measurements, and differences in data availability.
 
-Longitudinal wearable datasets can contain missing days, missing measurements, and incomplete variables.
+## Participant-Specific Modelling
 
-## Participant-specific ML models
+Personalized models depend on the amount of historical data available for each participant.
 
-Individual models may have relatively few observations available for training and evaluation.
+Participants with fewer usable observations provide less information for model training and evaluation.
 
-## Observational data
+## Observational Data
 
 The data are observational rather than experimental.
 
 Therefore, observed relationships cannot establish causal effects.
 
-## ML performance
+## Machine-Learning Performance
 
-The current predictive performance is generally limited, with most models producing non-positive \(R^2\).
+The current predictive performance is limited, with negative R² values across all participants.
 
-## No clinical validation
+## No Clinical Validation
 
 The system has not undergone clinical validation.
 
-## No external validation cohort
+## No External Validation Cohort
 
 The current analysis does not include an independent external validation dataset.
 
-## Well-being measurement
+## Well-Being Measurement
 
-Well-being is represented by five self-reported indicators rather than a complete multidimensional measurement of well-being.
+Well-being is represented using five self-reported indicators rather than a complete multidimensional measurement of well-being.
 
 ---
 
 # Ethical Interpretation
 
-The system is intended as an **early-warning and research framework**, not a diagnostic tool.
+The system is intended as a research framework for personalized well-being analysis, not as a diagnostic tool.
 
 An unusual behavioral pattern may have many possible explanations.
 
 For example:
 
 * unusually low activity may reflect illness, fatigue, schedule changes, or other circumstances;
-* unusually high activity may also have multiple explanations;
-* unusual sleep duration may arise from many behavioral or situational factors.
+* unusually high activity may also have different personal or situational explanations;
+* unusual sleep duration may have multiple possible causes.
 
 The current analysis cannot determine the underlying cause of a behavioral deviation.
 
@@ -906,23 +771,19 @@ Final methodological decisions, interpretation of results, and research conclusi
 The current repository contains the completed research pipeline covering:
 
 * personalized baseline construction
-* behavioral deviation detection
-* primary and sensitivity thresholds
-* same-day statistical analysis
-* one-day lagged analysis
+* behavioral deviation analysis
 * seven-day historical analysis
-* multiple-testing correction
-* final statistical summaries
-* ML data preparation
-* feature-availability analysis
-* personalized ML modeling
-* model evaluation
-* feature-importance analysis
+* participant-level correlation analysis
+* Wellbeing Index construction
+* seven-day temporal feature construction
+* personalized machine-learning modelling
+* prediction evaluation
 * methodological documentation
+* reproducibility documentation
 
 The statistical and machine-learning pipelines have been implemented and executed on the PMData participants.
 
-The current results support the **feasibility of studying personalized behavioral signals of well-being**, but they do not establish a clinically validated prediction system.
+The current results support the feasibility of studying personalized behavioral signals of well-being, but they do not establish a clinically validated prediction system.
 
 ---
 
@@ -932,15 +793,22 @@ Future development should focus on:
 
 1. larger longitudinal datasets
 2. additional participants
-3. stronger temporal validation
-4. improved predictive modeling
-5. more robust handling of missing data
-6. external validation
+3. longer observation periods
+4. stronger temporal validation
+5. improved predictive modelling
+6. more robust missing-data strategies
 7. additional well-being measures
-8. improved feature engineering
-9. longitudinal and personalized model comparison
-10. evaluation on independent datasets
-11. careful assessment before any real-world deployment
+8. richer behavioral feature engineering
+9. comparison of personalized and population-level models
+10. independent validation datasets
+11. linguistic and communication-related features
+12. health-related and psychologically relevant measures where appropriate and ethically justified
+
+Future work could also investigate whether speech, text, vocabulary, word choice, and other linguistic patterns provide additional information about changes in individual well-being.
+
+The same personalized framework could potentially be extended to companion animals using activity, movement, sleep-related measurements, and changes in daily routines.
+
+Such extensions would require appropriate privacy, consent, ethical safeguards, and professional oversight.
 
 ---
 
@@ -951,35 +819,38 @@ The central concept of the project can be summarized as:
 ```text
 Learn the individual's normal behavior
                 ↓
-Detect unusual deviations
+Identify deviations from the personal pattern
                 ↓
 Examine their relationship with well-being
                 ↓
-Model subsequent changes
+Use recent behavioral history for prediction
                 ↓
-Identify potentially useful personalized signals
+Evaluate personalized prediction
 ```
 
 The goal is not to define a universal behavioral threshold for everyone.
 
-Instead, the project investigates whether **changes relative to an individual's own behavioral baseline** can provide useful information about changes in that individual's reported well-being.
+Instead, the project investigates whether changes relative to an individual's own behavioral history can provide useful information about changes in that individual's reported well-being.
 
 ---
 
-## Research Position
+# Research Position
 
-The current project provides a complete framework combining:
+The current project provides a reproducible framework combining:
 
 * personalized behavioral baselines
-* deviation detection
-* temporal statistical analysis
-* multiple-testing correction
+* behavioral deviation analysis
+* seven-day temporal analysis
+* participant-level statistical relationships
 * personalized machine learning
-* model evaluation
-* behavioral feature-importance analysis
+* prediction evaluation
+* methodological documentation
 
-The statistical analyses identified FDR-significant associations across the completed analysis families.
+The statistical analysis identified 103 nominally significant participant-level associations in the final seven-day analysis.
 
-The machine-learning system was successfully implemented and evaluated at the participant level, although overall predictive performance was limited.
+The machine-learning system was implemented and evaluated at the participant level, although the current predictive performance was limited.
 
-Therefore, the main contribution of the current project is a **personalized methodology for investigating behavioral signals of well-being**, rather than a clinically validated prediction system.
+The main contribution of the project is therefore a **personalized methodology for investigating behavioral signals of well-being**, rather than a clinically validated prediction system.
+
+```
+```
