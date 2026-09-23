@@ -5,8 +5,7 @@ import pandas as pd
 
 # ============================================================
 # FINAL SUMMARY
-# Summarize results from analyses 01–05
-# No FDR correction
+# Summary of analyses 01–05
 # ============================================================
 
 BASE_DIR = os.path.dirname(
@@ -29,13 +28,13 @@ os.makedirs(OUTPUT_DIR, exist_ok=True)
 
 
 # ============================================================
-# HELPERS
+# FIND RESULT FILE
 # ============================================================
 
-def find_csv(patterns):
-    """Find the first matching CSV file inside results/."""
+def find_result(patterns):
 
     for pattern in patterns:
+
         matches = glob.glob(
             os.path.join(
                 RESULTS_DIR,
@@ -45,7 +44,6 @@ def find_csv(patterns):
             recursive=True
         )
 
-        # Do not use files from final_summary itself
         matches = [
             path for path in matches
             if os.path.abspath(OUTPUT_DIR)
@@ -58,339 +56,226 @@ def find_csv(patterns):
     return None
 
 
-def relationship_summary(path, analysis_name):
-    """
-    Summarize analyses that contain relationships.
-
-    Expected relationship columns:
-        Participant
-        Behavioral_Variable
-        Wellbeing_Variable
-        r
-        p
-    """
-
-    if path is None:
-        return {
-            "Analysis": analysis_name,
-            "File_Found": False
-        }, None
-
-    df = pd.read_csv(path)
-
-    required = [
-        "Participant",
-        "Behavioral_Variable",
-        "Wellbeing_Variable",
-        "r",
-        "p"
-    ]
-
-    missing = [
-        column
-        for column in required
-        if column not in df.columns
-    ]
-
-    if missing:
-        return {
-            "Analysis": analysis_name,
-            "File_Found": True,
-            "Error": "Missing columns: " + ", ".join(missing)
-        }, None
-
-    df["r"] = pd.to_numeric(
-        df["r"],
-        errors="coerce"
-    )
-
-    df["p"] = pd.to_numeric(
-        df["p"],
-        errors="coerce"
-    )
-
-    if "Included" in df.columns:
-        included = df[
-            df["Included"]
-            .astype(str)
-            .str.lower()
-            .isin(["yes", "true", "1"])
-        ].copy()
-    else:
-        included = df.copy()
-
-    valid = included.dropna(
-        subset=["r", "p"]
-    ).copy()
-
-    significant = valid[
-        valid["p"] < 0.05
-    ].copy()
-
-    summary = {
-        "Analysis": analysis_name,
-        "File_Found": True,
-        "Total_Rows": len(df),
-        "Included_Rows": len(included),
-        "Valid_Tests": len(valid),
-        "Nominal_Significant_p<0.05": len(significant),
-        "Participants": valid["Participant"].nunique(),
-        "Behavioral_Variables": valid[
-            "Behavioral_Variable"
-        ].nunique(),
-        "Wellbeing_Variables": valid[
-            "Wellbeing_Variable"
-        ].nunique(),
-        "Mean_r": valid["r"].mean(),
-        "Mean_Abs_r": valid["r"].abs().mean(),
-        "Strong_Associations_Abs_r>=0.50": (
-            valid["r"].abs() >= 0.50
-        ).sum()
-    }
-
-    return summary, valid
-
-
-def baseline_summary(path):
-    """
-    Baseline has a different structure from relationship analyses.
-
-    Therefore, do NOT try to calculate r/p statistics
-    from the baseline file.
-    """
-
-    if path is None:
-        return {
-            "Analysis": "01_baseline",
-            "File_Found": False
-        }
-
-    df = pd.read_csv(path)
-
-    return {
-        "Analysis": "01_baseline",
-        "File_Found": True,
-        "Total_Rows": len(df),
-        "Total_Columns": len(df.columns),
-        "Participants": (
-            df["Participant"].nunique()
-            if "Participant" in df.columns
-            else "N/A"
-        ),
-        "Nominal_Significant_p<0.05": "N/A"
-    }
-
-
 # ============================================================
-# 1. FIND OUTPUT FILES
+# LOAD RESULTS
 # ============================================================
 
 files = {
-    "01_baseline": find_csv([
+    "01_build_baseline": find_result([
         "*baseline*.csv"
     ]),
 
-    "02_same_day": find_csv([
+    "02_same_day_analysis": find_result([
         "*same_day*.csv",
         "*same-day*.csv"
     ]),
 
-    "03_lagged": find_csv([
+    "03_lagged_analysis": find_result([
         "*lagged*.csv",
         "*lag*.csv"
     ]),
 
-    "04_seven_day": find_csv([
+    "04_seven_day_analysis": find_result([
         "*seven_day_history_wellbeing_relationships*.csv",
         "*seven_day*.csv"
     ]),
 
-    "05_sensitivity": find_csv([
+    "05_sensitivity_analysis": find_result([
         "*sensitivity*.csv"
     ])
 }
 
 
 # ============================================================
-# 2. BUILD SUMMARY
+# GENERAL SUMMARY
 # ============================================================
 
-summaries = []
-valid_results = {}
+summary_rows = []
 
 
-# -----------------------------
-# Baseline
-# -----------------------------
+for analysis, path in files.items():
 
-baseline_result = baseline_summary(
-    files["01_baseline"]
+    row = {
+        "Analysis": analysis,
+        "File_Found": path is not None
+    }
+
+    if path is None:
+        summary_rows.append(row)
+        continue
+
+    df = pd.read_csv(path)
+
+    row["Rows"] = len(df)
+    row["Columns"] = len(df.columns)
+
+    if "Participant" in df.columns:
+        row["Participants"] = df["Participant"].nunique()
+
+    if "r" in df.columns:
+
+        r = pd.to_numeric(
+            df["r"],
+            errors="coerce"
+        )
+
+        row["Valid_r"] = r.notna().sum()
+        row["Mean_r"] = r.mean()
+        row["Mean_abs_r"] = r.abs().mean()
+
+    if "p" in df.columns:
+
+        p = pd.to_numeric(
+            df["p"],
+            errors="coerce"
+        )
+
+        valid_p = p.dropna()
+
+        row["Valid_p"] = len(valid_p)
+        row["p_less_0_05"] = (
+            valid_p < 0.05
+        ).sum()
+
+    if "Behavioral_Variable" in df.columns:
+        row["Behavioral_Variables"] = (
+            df["Behavioral_Variable"]
+            .nunique()
+        )
+
+    if "Wellbeing_Variable" in df.columns:
+        row["Wellbeing_Variables"] = (
+            df["Wellbeing_Variable"]
+            .nunique()
+        )
+
+    summary_rows.append(row)
+
+
+summary_df = pd.DataFrame(
+    summary_rows
 )
-
-summaries.append(
-    baseline_result
-)
-
-
-# -----------------------------
-# Relationship analyses
-# -----------------------------
-
-for analysis_name in [
-    "02_same_day",
-    "03_lagged",
-    "04_seven_day",
-    "05_sensitivity"
-]:
-
-    summary, valid = relationship_summary(
-        files[analysis_name],
-        analysis_name
-    )
-
-    summaries.append(summary)
-
-    if valid is not None:
-        valid_results[analysis_name] = valid
-
-
-summary_df = pd.DataFrame(summaries)
 
 
 # ============================================================
-# 3. SAVE OVERALL SUMMARY
+# SAVE GENERAL SUMMARY
 # ============================================================
-
-summary_path = os.path.join(
-    OUTPUT_DIR,
-    "final_analysis_summary.csv"
-)
 
 summary_df.to_csv(
-    summary_path,
+    os.path.join(
+        OUTPUT_DIR,
+        "final_analysis_summary.csv"
+    ),
     index=False
 )
 
 
 # ============================================================
-# 4. SEVEN-DAY SUMMARY BY WELLBEING
+# SEVEN-DAY ANALYSIS
 # ============================================================
 
-if "04_seven_day" in valid_results:
+seven_day_file = files[
+    "04_seven_day_analysis"
+]
 
-    df = valid_results["04_seven_day"]
 
-    significant = df[
-        df["p"] < 0.05
-    ].copy()
+if seven_day_file is not None:
 
-    if not significant.empty:
+    df = pd.read_csv(
+        seven_day_file
+    )
 
-        wellbeing_summary = (
-            significant
-            .groupby("Wellbeing_Variable")
-            .agg(
-                Significant_Associations=("p", "size"),
-                Participants=("Participant", "nunique"),
-                Mean_Abs_r=(
-                    "r",
-                    lambda x: x.abs().mean()
+    if (
+        "p" in df.columns
+        and "Wellbeing_Variable" in df.columns
+    ):
+
+        p = pd.to_numeric(
+            df["p"],
+            errors="coerce"
+        )
+
+        significant = df[
+            p < 0.05
+        ].copy()
+
+        # ----------------------------------------
+        # By wellbeing measure
+        # ----------------------------------------
+
+        if not significant.empty:
+
+            wellbeing_summary = (
+                significant
+                .groupby(
+                    "Wellbeing_Variable"
+                )
+                .size()
+                .reset_index(
+                    name="Significant_Associations"
+                )
+                .sort_values(
+                    "Significant_Associations",
+                    ascending=False
+                )
+            )
+
+            wellbeing_summary.to_csv(
+                os.path.join(
+                    OUTPUT_DIR,
+                    "seven_day_summary_by_wellbeing.csv"
                 ),
-                Mean_r=("r", "mean")
+                index=False
             )
-            .reset_index()
-            .sort_values(
-                "Significant_Associations",
-                ascending=False
+
+        # ----------------------------------------
+        # By behavioral variable
+        # ----------------------------------------
+
+        if "Behavioral_Variable" in significant.columns:
+
+            behavior_summary = (
+                significant
+                .groupby(
+                    "Behavioral_Variable"
+                )
+                .size()
+                .reset_index(
+                    name="Significant_Associations"
+                )
+                .sort_values(
+                    "Significant_Associations",
+                    ascending=False
+                )
             )
+
+            behavior_summary.to_csv(
+                os.path.join(
+                    OUTPUT_DIR,
+                    "seven_day_summary_by_behavior.csv"
+                ),
+                index=False
+            )
+
+        # ----------------------------------------
+        # All significant seven-day relationships
+        # ----------------------------------------
+
+        significant = significant.sort_values(
+            "p"
         )
 
-        wellbeing_path = os.path.join(
-            OUTPUT_DIR,
-            "seven_day_summary_by_wellbeing.csv"
-        )
-
-        wellbeing_summary.to_csv(
-            wellbeing_path,
+        significant.to_csv(
+            os.path.join(
+                OUTPUT_DIR,
+                "seven_day_nominally_significant.csv"
+            ),
             index=False
         )
 
 
 # ============================================================
-# 5. SEVEN-DAY SUMMARY BY BEHAVIOR
-# ============================================================
-
-if "04_seven_day" in valid_results:
-
-    df = valid_results["04_seven_day"]
-
-    significant = df[
-        df["p"] < 0.05
-    ].copy()
-
-    if not significant.empty:
-
-        behavior_summary = (
-            significant
-            .groupby("Behavioral_Variable")
-            .agg(
-                Significant_Associations=("p", "size"),
-                Participants=("Participant", "nunique"),
-                Wellbeing_Measures=(
-                    "Wellbeing_Variable",
-                    "nunique"
-                ),
-                Mean_Abs_r=(
-                    "r",
-                    lambda x: x.abs().mean()
-                ),
-                Mean_r=("r", "mean")
-            )
-            .reset_index()
-            .sort_values(
-                "Significant_Associations",
-                ascending=False
-            )
-        )
-
-        behavior_path = os.path.join(
-            OUTPUT_DIR,
-            "seven_day_summary_by_behavior.csv"
-        )
-
-        behavior_summary.to_csv(
-            behavior_path,
-            index=False
-        )
-
-
-# ============================================================
-# 6. EXPORT NOMINALLY SIGNIFICANT SEVEN-DAY RESULTS
-# ============================================================
-
-if "04_seven_day" in valid_results:
-
-    df = valid_results["04_seven_day"]
-
-    significant = (
-        df[df["p"] < 0.05]
-        .sort_values("p")
-        .copy()
-    )
-
-    significant_path = os.path.join(
-        OUTPUT_DIR,
-        "seven_day_nominally_significant.csv"
-    )
-
-    significant.to_csv(
-        significant_path,
-        index=False
-    )
-
-
-# ============================================================
-# 7. TEXT REPORT
+# TEXT SUMMARY
 # ============================================================
 
 report_path = os.path.join(
@@ -398,60 +283,44 @@ report_path = os.path.join(
     "final_summary_report.txt"
 )
 
+
 with open(
     report_path,
     "w",
     encoding="utf-8"
 ) as f:
 
-    f.write("=" * 80 + "\n")
-    f.write("FINAL ANALYSIS SUMMARY\n")
-    f.write("Analyses 01–05\n")
-    f.write("FDR correction: NOT USED\n")
-    f.write("Significance criterion: raw p < 0.05\n")
-    f.write("=" * 80 + "\n\n")
+    f.write(
+        "FINAL ANALYSIS SUMMARY\n"
+    )
+
+    f.write(
+        "======================\n\n"
+    )
 
     for _, row in summary_df.iterrows():
 
         f.write(
-            f"Analysis: {row.get('Analysis', '')}\n"
+            f"Analysis: {row['Analysis']}\n"
         )
 
-        if row.get("File_Found", False):
+        for column in summary_df.columns:
 
-            for key in [
-                "Total_Rows",
-                "Included_Rows",
-                "Valid_Tests",
-                "Nominal_Significant_p<0.05",
-                "Participants",
-                "Behavioral_Variables",
-                "Wellbeing_Variables",
-                "Mean_r",
-                "Mean_Abs_r",
-                "Strong_Associations_Abs_r>=0.50"
-            ]:
+            if column == "Analysis":
+                continue
 
-                if key in row.index:
+            value = row[column]
 
-                    value = row.get(key)
-
-                    if pd.notna(value):
-                        f.write(
-                            f"  {key}: {value}\n"
-                        )
-
-        else:
-
-            f.write(
-                "  Result file not found.\n"
-            )
+            if pd.notna(value):
+                f.write(
+                    f"{column}: {value}\n"
+                )
 
         f.write("\n")
 
 
 # ============================================================
-# 8. CONSOLE OUTPUT
+# CONSOLE OUTPUT
 # ============================================================
 
 print("=" * 80)
@@ -469,8 +338,6 @@ for filename in sorted(
     os.listdir(OUTPUT_DIR)
 ):
 
-    print(f"  - {filename}")
-
-print()
-print("FDR was NOT applied.")
-print("Significance criterion: raw p < 0.05")
+    print(
+        f"  - {filename}"
+    )
