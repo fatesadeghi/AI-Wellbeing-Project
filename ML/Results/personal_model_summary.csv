@@ -1,0 +1,17 @@
+participant_id,person,total_prediction_dates,predictions_created,insufficient_training_dates,no_feature_dates
+p01_daily_merged,Person 1,144,133,11,0
+p02_daily_merged,Person 2,142,128,14,0
+p03_daily_merged,Person 3,144,116,15,13
+p04_daily_merged,Person 4,144,134,10,0
+p05_daily_merged,Person 5,144,133,11,0
+p06_daily_merged,Person 6,143,133,10,0
+p07_daily_merged,Person 7,138,128,10,0
+p08_daily_merged,Person 8,131,116,12,3
+p09_daily_merged,Person 9,130,118,12,0
+p10_daily_merged,Person 10,99,88,11,0
+p11_daily_merged,Person 11,112,101,10,1
+p12_daily_merged,Person 12,126,102,12,12
+p13_daily_merged,Person 13,128,102,11,15
+p14_daily_merged,Person 14,128,118,10,0
+p15_daily_merged,Person 15,128,108,10,10
+p16_daily_merged,Person 16,118,105,10,3

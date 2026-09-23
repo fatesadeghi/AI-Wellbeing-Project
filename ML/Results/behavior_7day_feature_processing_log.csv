@@ -1,0 +1,17 @@
+participant_id,source_file,target_dates,features_created,active_variables,removed_variables
+p01_daily_merged,p01_daily_merged.csv,144,144,13,0
+p02_daily_merged,p02_daily_merged.csv,142,142,13,0
+p03_daily_merged,p03_daily_merged.csv,144,144,13,0
+p04_daily_merged,p04_daily_merged.csv,144,144,13,0
+p05_daily_merged,p05_daily_merged.csv,144,144,13,0
+p06_daily_merged,p06_daily_merged.csv,143,143,13,0
+p07_daily_merged,p07_daily_merged.csv,138,138,13,0
+p08_daily_merged,p08_daily_merged.csv,131,131,13,0
+p09_daily_merged,p09_daily_merged.csv,130,130,13,0
+p10_daily_merged,p10_daily_merged.csv,99,99,13,0
+p11_daily_merged,p11_daily_merged.csv,112,112,13,0
+p12_daily_merged,p12_daily_merged.csv,126,126,6,7
+p13_daily_merged,p13_daily_merged.csv,128,128,13,0
+p14_daily_merged,p14_daily_merged.csv,128,128,13,0
+p15_daily_merged,p15_daily_merged.csv,128,128,13,0
+p16_daily_merged,p16_daily_merged.csv,118,118,12,1
