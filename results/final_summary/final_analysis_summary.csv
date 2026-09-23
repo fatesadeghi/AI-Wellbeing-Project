@@ -1,0 +1,6 @@
+Analysis,File_Found,Total_Rows,Total_Columns,Participants,Nominal_Significant_p<0.05,Included_Rows,Valid_Tests,Behavioral_Variables,Wellbeing_Variables,Mean_r,Mean_Abs_r,Strong_Associations_Abs_r>=0.50
+01_baseline,True,16,80.0,16,N/A,,,,,,,
+02_same_day,True,1040,,16,180,955.0,900.0,13.0,5.0,0.08363845576040153,0.17168918257762003,20.0
+03_lagged,True,1040,,16,63,1040.0,862.0,13.0,5.0,-0.006606659012127008,0.14123431172444137,9.0
+04_seven_day,True,1040,,16,103,845.0,794.0,13.0,5.0,-0.016448806822732497,0.16879579201833828,15.0
+05_sensitivity,True,1040,,16,182,955.0,887.0,13.0,5.0,0.08756077809747533,0.18339588550876865,33.0

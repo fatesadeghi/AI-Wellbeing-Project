@@ -1,0 +1,60 @@
+================================================================================
+FINAL ANALYSIS SUMMARY
+Analyses 01–05
+FDR correction: NOT USED
+Significance criterion: raw p < 0.05
+================================================================================
+
+Analysis: 01_baseline
+  Total_Rows: 16
+  Nominal_Significant_p<0.05: N/A
+  Participants: 16
+
+Analysis: 02_same_day
+  Total_Rows: 1040
+  Included_Rows: 955.0
+  Valid_Tests: 900.0
+  Nominal_Significant_p<0.05: 180
+  Participants: 16
+  Behavioral_Variables: 13.0
+  Wellbeing_Variables: 5.0
+  Mean_r: 0.08363845576040153
+  Mean_Abs_r: 0.17168918257762003
+  Strong_Associations_Abs_r>=0.50: 20.0
+
+Analysis: 03_lagged
+  Total_Rows: 1040
+  Included_Rows: 1040.0
+  Valid_Tests: 862.0
+  Nominal_Significant_p<0.05: 63
+  Participants: 16
+  Behavioral_Variables: 13.0
+  Wellbeing_Variables: 5.0
+  Mean_r: -0.006606659012127008
+  Mean_Abs_r: 0.14123431172444137
+  Strong_Associations_Abs_r>=0.50: 9.0
+
+Analysis: 04_seven_day
+  Total_Rows: 1040
+  Included_Rows: 845.0
+  Valid_Tests: 794.0
+  Nominal_Significant_p<0.05: 103
+  Participants: 16
+  Behavioral_Variables: 13.0
+  Wellbeing_Variables: 5.0
+  Mean_r: -0.016448806822732497
+  Mean_Abs_r: 0.16879579201833828
+  Strong_Associations_Abs_r>=0.50: 15.0
+
+Analysis: 05_sensitivity
+  Total_Rows: 1040
+  Included_Rows: 955.0
+  Valid_Tests: 887.0
+  Nominal_Significant_p<0.05: 182
+  Participants: 16
+  Behavioral_Variables: 13.0
+  Wellbeing_Variables: 5.0
+  Mean_r: 0.08756077809747533
+  Mean_Abs_r: 0.18339588550876865
+  Strong_Associations_Abs_r>=0.50: 33.0
+
