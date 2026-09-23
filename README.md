@@ -1,6 +1,3 @@
-بله. این هم نسخه کامل با Markdown واقعی، آماده کپی مستقیم در `README.md`:
-
-````markdown
 # AI-Based Early Detection of Changes in Well-Being and Quality of Life Among People Living Alone
 
 **Personalized behavioral analysis and machine learning using the PMData dataset**
