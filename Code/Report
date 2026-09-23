@@ -1,0 +1,505 @@
+import os
+import pandas as pd
+import matplotlib.pyplot as plt
+
+
+# ============================================================
+# FINAL RESULTS
+# Summary, table, and chart for the final seven-day analysis
+# ============================================================
+
+
+# ============================================================
+# 1. PROJECT PATHS
+# ============================================================
+
+BASE_DIR = os.path.dirname(
+    os.path.dirname(
+        os.path.abspath(__file__)
+    )
+)
+
+RESULTS_DIR = os.path.join(
+    BASE_DIR,
+    "results"
+)
+
+INPUT_DIR = os.path.join(
+    RESULTS_DIR,
+    "seven_day"
+)
+
+INPUT_FILE = os.path.join(
+    INPUT_DIR,
+    "seven_day_history_wellbeing_relationships.csv"
+)
+
+OUTPUT_DIR = os.path.join(
+    RESULTS_DIR,
+    "final"
+)
+
+os.makedirs(
+    OUTPUT_DIR,
+    exist_ok=True
+)
+
+
+# ============================================================
+# 2. REQUIRED COLUMNS
+# ============================================================
+
+REQUIRED_COLUMNS = [
+    "Participant",
+    "Behavioral_Variable",
+    "Wellbeing_Variable",
+    "r",
+    "p",
+    "N",
+    "Included",
+]
+
+
+# ============================================================
+# 3. CHECK INPUT FILE
+# ============================================================
+
+if not os.path.exists(INPUT_FILE):
+
+    raise FileNotFoundError(
+        "Final seven-day analysis result was not found:\n"
+        f"{INPUT_FILE}"
+    )
+
+
+# ============================================================
+# 4. LOAD RESULTS
+# ============================================================
+
+print("=" * 80)
+print("FINAL RESULTS")
+print("=" * 80)
+
+print(
+    f"Loading:\n{INPUT_FILE}"
+)
+
+results = pd.read_csv(
+    INPUT_FILE
+)
+
+
+# ============================================================
+# 5. VALIDATE INPUT
+# ============================================================
+
+missing_columns = [
+    column
+    for column in REQUIRED_COLUMNS
+    if column not in results.columns
+]
+
+if missing_columns:
+
+    raise ValueError(
+        "The input file is missing required columns:\n"
+        + ", ".join(missing_columns)
+    )
+
+
+if results.empty:
+
+    raise ValueError(
+        "The seven-day result file is empty."
+    )
+
+
+# ============================================================
+# 6. PREPARE NUMERIC COLUMNS
+# ============================================================
+
+results["r"] = pd.to_numeric(
+    results["r"],
+    errors="coerce"
+)
+
+results["p"] = pd.to_numeric(
+    results["p"],
+    errors="coerce"
+)
+
+results["N"] = pd.to_numeric(
+    results["N"],
+    errors="coerce"
+)
+
+
+# ============================================================
+# 7. SELECT INCLUDED RELATIONSHIPS
+# ============================================================
+
+included = results[
+    results["Included"].astype(str).str.strip().str.lower()
+    == "yes"
+].copy()
+
+
+if included.empty:
+
+    raise ValueError(
+        "No relationships were marked as Included == Yes."
+    )
+
+
+# ============================================================
+# 8. VALID CORRELATIONS
+# ============================================================
+
+valid_correlations = included[
+    included["r"].notna()
+].copy()
+
+valid_p_values = included[
+    included["p"].notna()
+].copy()
+
+
+# ============================================================
+# 9. NOMINALLY SIGNIFICANT RELATIONSHIPS
+# ============================================================
+
+nominally_significant = valid_p_values[
+    valid_p_values["p"] < 0.05
+].copy()
+
+nominally_significant = (
+    nominally_significant
+    .sort_values("p")
+    .reset_index(drop=True)
+)
+
+
+# ============================================================
+# 10. SUMMARY STATISTICS
+# ============================================================
+
+participant_count = (
+    included["Participant"]
+    .nunique()
+)
+
+total_relationships = len(results)
+
+included_relationships = len(included)
+
+valid_correlation_count = len(
+    valid_correlations
+)
+
+nominally_significant_count = len(
+    nominally_significant
+)
+
+mean_r = (
+    valid_correlations["r"].mean()
+    if not valid_correlations.empty
+    else float("nan")
+)
+
+mean_absolute_r = (
+    valid_correlations["r"].abs().mean()
+    if not valid_correlations.empty
+    else float("nan")
+)
+
+behavior_count = (
+    included["Behavioral_Variable"]
+    .nunique()
+)
+
+wellbeing_count = (
+    included["Wellbeing_Variable"]
+    .nunique()
+)
+
+
+# ============================================================
+# 11. SUMMARY TABLE BY WELLBEING
+# ============================================================
+
+wellbeing_table = (
+    nominally_significant
+    .groupby("Wellbeing_Variable")
+    .size()
+    .reset_index(
+        name="Nominally_Significant_Associations"
+    )
+)
+
+
+# ------------------------------------------------------------
+# Keep the original wellbeing variable order when possible.
+# ------------------------------------------------------------
+
+wellbeing_order = [
+    "fatigue",
+    "mood",
+    "readiness",
+    "sleep_quality",
+    "stress",
+]
+
+wellbeing_table["Order"] = (
+    wellbeing_table["Wellbeing_Variable"]
+    .map(
+        {
+            name: index
+            for index, name in enumerate(
+                wellbeing_order
+            )
+        }
+    )
+)
+
+wellbeing_table = (
+    wellbeing_table
+    .sort_values(
+        ["Order", "Wellbeing_Variable"],
+        na_position="last"
+    )
+    .drop(columns=["Order"])
+    .reset_index(drop=True)
+)
+
+
+# ============================================================
+# 12. SAVE SUMMARY TABLE
+# ============================================================
+
+TABLE_FILE = os.path.join(
+    OUTPUT_DIR,
+    "final_summary_table.csv"
+)
+
+wellbeing_table.to_csv(
+    TABLE_FILE,
+    index=False
+)
+
+
+# ============================================================
+# 13. SAVE NOMINALLY SIGNIFICANT RESULTS
+# ============================================================
+
+SIGNIFICANT_FILE = os.path.join(
+    OUTPUT_DIR,
+    "nominally_significant_relationships.csv"
+)
+
+nominally_significant.to_csv(
+    SIGNIFICANT_FILE,
+    index=False
+)
+
+
+# ============================================================
+# 14. CREATE BAR CHART
+# ============================================================
+
+if wellbeing_table.empty:
+
+    print(
+        "\nNo nominally significant relationships "
+        "were found. Chart will not be created."
+    )
+
+else:
+
+    plt.figure(
+        figsize=(9, 5)
+    )
+
+    plt.bar(
+        wellbeing_table["Wellbeing_Variable"],
+        wellbeing_table[
+            "Nominally_Significant_Associations"
+        ]
+    )
+
+    plt.xlabel(
+        "Wellbeing measure"
+    )
+
+    plt.ylabel(
+        "Number of nominally significant associations"
+    )
+
+    plt.title(
+        "Seven-day behavioral history and wellbeing"
+    )
+
+    plt.xticks(
+        rotation=30,
+        ha="right"
+    )
+
+    plt.tight_layout()
+
+    CHART_FILE = os.path.join(
+        OUTPUT_DIR,
+        "final_summary_chart.png"
+    )
+
+    plt.savefig(
+        CHART_FILE,
+        dpi=300,
+        bbox_inches="tight"
+    )
+
+    plt.close()
+
+
+# ============================================================
+# 15. CREATE TEXT SUMMARY
+# ============================================================
+
+REPORT_FILE = os.path.join(
+    OUTPUT_DIR,
+    "final_summary.txt"
+)
+
+with open(
+    REPORT_FILE,
+    "w",
+    encoding="utf-8"
+) as file:
+
+    file.write(
+        "FINAL SEVEN-DAY ANALYSIS SUMMARY\n"
+    )
+
+    file.write(
+        "=================================\n\n"
+    )
+
+    file.write(
+        "Analysis framework:\n"
+    )
+
+    file.write(
+        "Previous 7 days of behavioral data "
+        "-> same-day wellbeing\n\n"
+    )
+
+    file.write(
+        f"Participants: {participant_count}\n"
+    )
+
+    file.write(
+        f"Total relationships tested: "
+        f"{total_relationships}\n"
+    )
+
+    file.write(
+        f"Relationships included (N >= 10): "
+        f"{included_relationships}\n"
+    )
+
+    file.write(
+        f"Valid correlations: "
+        f"{valid_correlation_count}\n"
+    )
+
+    file.write(
+        f"Behavioral variables: "
+        f"{behavior_count}\n"
+    )
+
+    file.write(
+        f"Wellbeing variables: "
+        f"{wellbeing_count}\n"
+    )
+
+    file.write(
+        f"Mean r: "
+        f"{mean_r:.4f}\n"
+    )
+
+    file.write(
+        f"Mean absolute r: "
+        f"{mean_absolute_r:.4f}\n"
+    )
+
+    file.write(
+        "Nominally significant associations "
+        "(p < 0.05): "
+        f"{nominally_significant_count}\n\n"
+    )
+
+    file.write(
+        "Important note:\n"
+    )
+
+    file.write(
+        "Associations with p < 0.05 are treated as "
+        "nominally significant exploratory associations. "
+        "They do not establish causality.\n"
+    )
+
+
+# ============================================================
+# 16. CONSOLE SUMMARY
+# ============================================================
+
+print()
+print("=" * 80)
+print("FINAL RESULTS COMPLETED")
+print("=" * 80)
+
+print(
+    f"Participants: "
+    f"{participant_count}"
+)
+
+print(
+    f"Total relationships tested: "
+    f"{total_relationships}"
+)
+
+print(
+    f"Included relationships: "
+    f"{included_relationships}"
+)
+
+print(
+    f"Valid correlations: "
+    f"{valid_correlation_count}"
+)
+
+print(
+    f"Nominally significant associations: "
+    f"{nominally_significant_count}"
+)
+
+print()
+print("Generated files:")
+
+print(
+    f"  - {TABLE_FILE}"
+)
+
+print(
+    f"  - {SIGNIFICANT_FILE}"
+)
+
+print(
+    f"  - {REPORT_FILE}"
+)
+
+if not wellbeing_table.empty:
+
+    print(
+        f"  - {CHART_FILE}"
+    )
+
+print("=" * 80)
