@@ -1,5 +1,3 @@
-cat > ML/05_test_predictions.py <<'PY'
-import os
 import pandas as pd
 import numpy as np
 
